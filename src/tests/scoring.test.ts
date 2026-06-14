@@ -74,6 +74,29 @@ describe("scoring", () => {
     expect(result.mistakes.map((mistake) => mistake.label)).toContain("Melee action not ready");
   });
 
+  it("penalizes unrelated Auto clips before a later ideal Auto fire", () => {
+    const ideal = expandRotationPattern(getRotationPreset("one-two"));
+    const events: SimEvent[] = [
+      ...toPerfectEvents(ideal),
+      { type: "auto-clipped", atMs: ideal[1].idealAtMs + 25, ability: "autoShot", reason: "casting-at-spark" },
+    ];
+
+    const result = scoreEvents(ideal, events);
+
+    expect(result.efficiency).toBeLessThan(100);
+    expect(result.mistakes.map((mistake) => mistake.label)).toContain("Auto clipped");
+  });
+
+  it("surfaces GCD-locked presses as early timing feedback", () => {
+    const ideal = expandRotationPattern(getRotationPreset("one-one"));
+    const result = scoreEvents(ideal.slice(1, 2), [
+      { type: "invalid-input", atMs: ideal[1].idealAtMs - 250, ability: ideal[1].ability, reason: "gcd-locked" },
+    ]);
+
+    expect(result.efficiency).toBeLessThan(100);
+    expect(result.mistakes.map((mistake) => mistake.label)).toContain("Steady 250ms early");
+  });
+
   it("scores chronological raw event arrays by relevant event time", () => {
     const ideal = expandRotationPattern(getRotationPreset("one-one"));
     const events: SimEvent[] = [

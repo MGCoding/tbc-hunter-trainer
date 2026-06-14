@@ -1,8 +1,10 @@
+import { TIMING } from "../data/constants";
 import type { AbilityId, IdealEvent, ScoreMistake, ScoreResult, SimEvent } from "./types";
 
 const TIMING_TOLERANCE_MS = 100;
 
 type ScoreableEvent = SimEvent & { ability: AbilityId };
+type InvalidInputEvent = SimEvent & { type: "invalid-input"; ability: AbilityId };
 
 function isScoreableEvent(event: SimEvent): event is ScoreableEvent {
   if (!event.ability) {
@@ -35,6 +37,20 @@ function addTimingMistake(mistakes: ScoreMistake[], expected: IdealEvent, actual
   }
 }
 
+function findGcdLockedEvent(expected: IdealEvent, events: SimEvent[]): InvalidInputEvent | undefined {
+  return events.find((event): event is InvalidInputEvent => {
+    return event.type === "invalid-input" && event.reason === "gcd-locked" && event.ability === expected.ability && event.atMs < expected.idealAtMs;
+  });
+}
+
+function isExpectedClipReplacement(event: SimEvent, events: SimEvent[], idealAutoFireTimes: Set<number>): boolean {
+  const nextAutoFire = events
+    .filter((candidate) => candidate.type === "auto-fire" && candidate.ability === "autoShot" && candidate.atMs > event.atMs)
+    .sort((first, second) => first.atMs - second.atMs)[0];
+
+  return nextAutoFire !== undefined && nextAutoFire.atMs - event.atMs <= TIMING.noMoveNoCastLeadMs && idealAutoFireTimes.has(nextAutoFire.atMs);
+}
+
 export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResult {
   const mistakes: ScoreMistake[] = [];
   const scoreableEvents = events.filter(isScoreableEvent).sort(compareScoreableEvents);
@@ -60,6 +76,11 @@ export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResul
   }
 
   for (const expected of ideal.slice(idealIndex)) {
+    const gcdLocked = findGcdLockedEvent(expected, events);
+    if (gcdLocked) {
+      addTimingMistake(mistakes, expected, gcdLocked);
+      continue;
+    }
     mistakes.push({ atMs: expected.idealAtMs, label: `${expected.label} missed`, penalty: 8 });
   }
 
@@ -69,10 +90,7 @@ export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResul
 
   for (const event of events) {
     if (event.type === "auto-clipped") {
-      const clippedAutoResolvedInIdeal = events.some((candidate) => {
-        return candidate.type === "auto-fire" && candidate.ability === "autoShot" && candidate.atMs > event.atMs && idealAutoFireTimes.has(candidate.atMs);
-      });
-      if (clippedAutoResolvedInIdeal) {
+      if (isExpectedClipReplacement(event, events, idealAutoFireTimes)) {
         continue;
       }
       mistakes.push({ atMs: event.atMs, label: "Auto clipped", penalty: 15 });

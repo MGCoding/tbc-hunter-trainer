@@ -15,6 +15,18 @@ describe("simulator", () => {
     }));
   });
 
+  it("starts a queued GCD ability when the GCD becomes ready even if tick advances later", () => {
+    const sim = createSimulator(getRotationPreset("one-one"));
+    sim.pressAbility("steadyShot", 0);
+    sim.pressAbility("arcaneShot", 1450);
+    sim.tick(2000);
+    expect(sim.getLog()).toContainEqual(expect.objectContaining({
+      type: "cast-start",
+      atMs: 1500,
+      ability: "arcaneShot",
+    }));
+  });
+
   it("allows Steady Shot after Auto Shot wind-up begins", () => {
     const sim = createSimulator(getRotationPreset("one-one"));
     const autoDue = sim.getState().nextAutoAtMs;

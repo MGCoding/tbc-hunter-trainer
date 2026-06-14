@@ -67,9 +67,11 @@ export class Simulator {
     this.state.nowMs = toMs;
 
     if (this.state.queuedAbility && this.state.nowMs >= this.state.gcdReadyAtMs) {
+      const queuedAtMs = this.state.gcdReadyAtMs;
       const queued = this.state.queuedAbility;
       this.state.queuedAbility = null;
-      this.startCast(queued, this.state.nowMs);
+      this.startCast(queued, queuedAtMs);
+      this.completeActiveCast(toMs);
     }
   }
 

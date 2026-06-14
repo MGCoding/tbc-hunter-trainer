@@ -1,34 +1,58 @@
-import type { IdealEvent, ScoreMistake, ScoreResult, SimEvent } from "./types";
+import type { AbilityId, IdealEvent, ScoreMistake, ScoreResult, SimEvent } from "./types";
 
 const TIMING_TOLERANCE_MS = 100;
 
-function isScoringEvent(event: SimEvent): boolean {
-  return event.type === "cast-start" || event.type === "auto-fire";
+type ScoreableEvent = SimEvent & { ability: AbilityId };
+
+function isScoreableEvent(event: SimEvent): event is ScoreableEvent {
+  if (!event.ability) {
+    return false;
+  }
+  if (event.type === "auto-fire") {
+    return event.ability === "autoShot";
+  }
+  return event.type === "cast-start" && event.ability !== "autoShot";
+}
+
+function addTimingMistake(mistakes: ScoreMistake[], expected: IdealEvent, actual: ScoreableEvent): void {
+  const offset = actual.atMs - expected.idealAtMs;
+  if (Math.abs(offset) > TIMING_TOLERANCE_MS) {
+    mistakes.push({
+      atMs: actual.atMs,
+      label: `${expected.label} ${Math.abs(Math.round(offset))}ms ${offset > 0 ? "late" : "early"}`,
+      penalty: Math.min(12, Math.abs(offset) / 50),
+    });
+  }
 }
 
 export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResult {
   const mistakes: ScoreMistake[] = [];
-  const castEvents = events.filter(isScoringEvent).sort((a, b) => a.atMs - b.atMs);
+  const scoreableEvents = events.filter(isScoreableEvent).sort((a, b) => a.atMs - b.atMs);
 
-  ideal.forEach((expected, index) => {
-    const actual = castEvents[index];
-    if (!actual) {
-      mistakes.push({ atMs: expected.idealAtMs, label: `${expected.label} missed`, penalty: 8 });
-      return;
-    }
+  let idealIndex = 0;
+  let actualIndex = 0;
+
+  while (idealIndex < ideal.length && actualIndex < scoreableEvents.length) {
+    const expected = ideal[idealIndex];
+    const actual = scoreableEvents[actualIndex];
     if (actual.ability !== expected.ability) {
-      mistakes.push({ atMs: actual.atMs, label: `Expected ${expected.label}`, penalty: 10 });
-      return;
+      mistakes.push({ atMs: actual.atMs, label: `Unexpected ${actual.ability}`, penalty: 10 });
+      actualIndex += 1;
+      continue;
     }
-    const offset = actual.atMs - expected.idealAtMs;
-    if (Math.abs(offset) > TIMING_TOLERANCE_MS) {
-      mistakes.push({
-        atMs: actual.atMs,
-        label: `${expected.label} ${Math.abs(Math.round(offset))}ms ${offset > 0 ? "late" : "early"}`,
-        penalty: Math.min(12, Math.abs(offset) / 50),
-      });
-    }
-  });
+
+    addTimingMistake(mistakes, expected, actual);
+    idealIndex += 1;
+    actualIndex += 1;
+  }
+
+  for (const expected of ideal.slice(idealIndex)) {
+    mistakes.push({ atMs: expected.idealAtMs, label: `${expected.label} missed`, penalty: 8 });
+  }
+
+  for (const actual of scoreableEvents.slice(actualIndex)) {
+    mistakes.push({ atMs: actual.atMs, label: `Unexpected ${actual.ability}`, penalty: 10 });
+  }
 
   for (const event of events) {
     if (event.type === "auto-clipped") {
@@ -43,10 +67,9 @@ export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResul
   }
 
   const penalty = mistakes.reduce((sum, mistake) => sum + mistake.penalty, 0);
-  const matchedCount = Math.min(castEvents.length, ideal.length);
   return {
-    efficiency: Math.max(0, Math.round(100 - penalty)),
+    efficiency: Math.min(100, Math.max(0, Math.round(100 - penalty))),
     mistakes,
-    nextExpected: ideal[matchedCount] ?? null,
+    nextExpected: ideal[idealIndex] ?? null,
   };
 }

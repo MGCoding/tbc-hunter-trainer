@@ -59,6 +59,17 @@ describe("App UI", () => {
 
     expect(rotationSelect).toHaveValue("half-weave-22-1w");
   });
+
+  it("keeps mapped ability input live after side-panel focus changes", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
+    fireEvent.keyDown(document, { code: "Digit4" });
+
+    expect(screen.getByText("ability-press")).toBeInTheDocument();
+    expect(screen.getAllByText("steadyShot").length).toBeGreaterThan(0);
+  });
 });
 
 describe("EventLogPanel", () => {

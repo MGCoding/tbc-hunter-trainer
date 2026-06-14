@@ -23,7 +23,7 @@ export function PhaserHost({ preset, getSimulatorState, onAbilityPress }: Phaser
     }
 
     parent.focus();
-    return attachBrowserInput(parent, DEFAULT_KEYBINDS, {
+    return attachBrowserInput(document, DEFAULT_KEYBINDS, {
       onMovementChange: () => undefined,
       onAbilityPress,
     });

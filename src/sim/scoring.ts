@@ -14,6 +14,16 @@ function isScoreableEvent(event: SimEvent): event is ScoreableEvent {
   return event.type === "cast-start" && event.ability !== "autoShot";
 }
 
+function compareScoreableEvents(first: ScoreableEvent, second: ScoreableEvent): number {
+  if (first.atMs !== second.atMs) {
+    return first.atMs - second.atMs;
+  }
+  if (first.type === second.type) {
+    return 0;
+  }
+  return first.type === "auto-fire" ? -1 : 1;
+}
+
 function addTimingMistake(mistakes: ScoreMistake[], expected: IdealEvent, actual: ScoreableEvent): void {
   const offset = actual.atMs - expected.idealAtMs;
   if (Math.abs(offset) > TIMING_TOLERANCE_MS) {
@@ -27,7 +37,7 @@ function addTimingMistake(mistakes: ScoreMistake[], expected: IdealEvent, actual
 
 export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResult {
   const mistakes: ScoreMistake[] = [];
-  const scoreableEvents = events.filter(isScoreableEvent).sort((a, b) => a.atMs - b.atMs);
+  const scoreableEvents = events.filter(isScoreableEvent).sort(compareScoreableEvents);
 
   let idealIndex = 0;
   let actualIndex = 0;

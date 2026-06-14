@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getRotationPreset } from "../data/rotations";
 import { scoreEvents } from "../sim/scoring";
+import { createSimulator } from "../sim/simulator";
 import { expandRotationPattern } from "../sim/timeline";
 import type { IdealEvent, SimEvent } from "../sim/types";
 
@@ -74,6 +75,19 @@ describe("scoring", () => {
     ];
 
     expect(scoreEvents(ideal, events).efficiency).toBe(100);
+  });
+
+  it("matches the first ideal Auto Shot against simulator auto-fire output", () => {
+    const preset = getRotationPreset("one-one");
+    const ideal = expandRotationPattern(preset);
+    const sim = createSimulator(preset);
+
+    sim.tick(preset.targetRangedSwingMs);
+    const result = scoreEvents(ideal.slice(0, 1), sim.getLog());
+
+    expect(sim.getLog()).toContainEqual({ type: "auto-fire", atMs: ideal[0].idealAtMs, ability: "autoShot" });
+    expect(result.mistakes).toEqual([]);
+    expect(result.efficiency).toBe(100);
   });
 
   it("scores weaving timelines with Raptor Strike and melee swings", () => {

@@ -41,8 +41,16 @@ describe("abilities and timelines", () => {
       "autoShot",
       "raptorStrike",
     ]);
-    expect(events[0].idealAtMs).toBe(0);
+    expect(events[0].idealAtMs).toBeCloseTo(preset.targetRangedSwingMs);
     expect(events[1].idealAtMs).toBeGreaterThan(0);
+  });
+
+  it("aligns the first ideal Auto Shot with simulator auto-fire timing", () => {
+    const preset = getRotationPreset("one-one");
+    const [firstEvent] = expandRotationPattern(preset);
+
+    expect(firstEvent.ability).toBe("autoShot");
+    expect(firstEvent.idealAtMs).toBeCloseTo(preset.targetRangedSwingMs);
   });
 
   it("keeps GCD abilities at least one global cooldown apart", () => {

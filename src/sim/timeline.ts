@@ -30,7 +30,7 @@ export function parseRotationTokens(pattern: string): RotationToken[] {
 export function expandRotationPattern(preset: RotationPreset): IdealEvent[] {
   let currentMs = 0;
   let gcdReadyAt = 0;
-  let nextAutoAt = 0;
+  let nextAutoAt = preset.targetRangedSwingMs;
   let raptorReadyAt = 0;
   let meleeReadyAt = 0;
 
@@ -68,7 +68,7 @@ export function expandRotationPattern(preset: RotationPreset): IdealEvent[] {
     if (ability === "meleeSwing") {
       meleeReadyAt = start + preset.derivedMeleeSwingMs;
     }
-    currentMs = start + timing.castMs;
+    currentMs = token === "a" ? start : start + timing.castMs;
 
     return event;
   });

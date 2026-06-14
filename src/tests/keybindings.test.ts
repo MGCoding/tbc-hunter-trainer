@@ -111,6 +111,40 @@ describe("browser input adapter", () => {
     cleanup();
   });
 
+  it("ignores mapped keyboard inputs with meta shortcuts without preventing default", () => {
+    const target = new EventTarget();
+    const onAbilityPress = vi.fn();
+    const cleanup = attachBrowserInput(target, DEFAULT_KEYBINDS, {
+      onMovementChange: vi.fn(),
+      onAbilityPress,
+    });
+    const shortcutEvent = new KeyboardEvent("keydown", { code: "Digit1", cancelable: true, metaKey: true });
+
+    target.dispatchEvent(shortcutEvent);
+
+    expect(onAbilityPress).not.toHaveBeenCalled();
+    expect(shortcutEvent.defaultPrevented).toBe(false);
+
+    cleanup();
+  });
+
+  it("ignores mapped keyboard inputs with control shortcuts without preventing default", () => {
+    const target = new EventTarget();
+    const onAbilityPress = vi.fn();
+    const cleanup = attachBrowserInput(target, DEFAULT_KEYBINDS, {
+      onMovementChange: vi.fn(),
+      onAbilityPress,
+    });
+    const shortcutEvent = new KeyboardEvent("keydown", { code: "Digit1", cancelable: true, ctrlKey: true });
+
+    target.dispatchEvent(shortcutEvent);
+
+    expect(onAbilityPress).not.toHaveBeenCalled();
+    expect(shortcutEvent.defaultPrevented).toBe(false);
+
+    cleanup();
+  });
+
   it("removes listeners during cleanup", () => {
     const target = new EventTarget();
     const onMovementChange = vi.fn();

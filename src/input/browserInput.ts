@@ -46,6 +46,18 @@ function makeMouseBinding(event: MouseEvent): KeyBinding {
   return { kind: "mouse", button: event.button };
 }
 
+function hasModifierChord(event: KeyboardEvent): boolean {
+  return event.metaKey || event.ctrlKey || event.altKey || event.shiftKey;
+}
+
+function isEditableKeyboardTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return target.matches('input, textarea, select, [contenteditable="true"]');
+}
+
 export function attachBrowserInput(
   target: BrowserInputTarget,
   bindingsOrGetBindings: KeybindingSource,
@@ -70,6 +82,10 @@ export function attachBrowserInput(
 
   const handleKeyDown = (event: Event): void => {
     if (!(event instanceof KeyboardEvent)) {
+      return;
+    }
+
+    if (hasModifierChord(event) || isEditableKeyboardTarget(event.target)) {
       return;
     }
 
@@ -98,6 +114,10 @@ export function attachBrowserInput(
 
   const handleKeyUp = (event: Event): void => {
     if (!(event instanceof KeyboardEvent)) {
+      return;
+    }
+
+    if (hasModifierChord(event) || isEditableKeyboardTarget(event.target)) {
       return;
     }
 

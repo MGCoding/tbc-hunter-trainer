@@ -65,7 +65,7 @@ describe("App UI", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
-    fireEvent.keyDown(document, { code: "Digit4" });
+    fireEvent.keyDown(document.activeElement ?? document, { code: "Digit4" });
 
     expect(screen.getByText("ability-press")).toBeInTheDocument();
     expect(screen.getAllByText("steadyShot").length).toBeGreaterThan(0);

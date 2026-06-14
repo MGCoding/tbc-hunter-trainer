@@ -91,3 +91,38 @@ export interface IdealEvent {
   idealAtMs: number;
   label: string;
 }
+
+export type SimEventType =
+  | "ability-press"
+  | "queued"
+  | "cast-start"
+  | "cast-complete"
+  | "auto-windup"
+  | "auto-fire"
+  | "auto-clipped"
+  | "invalid-input"
+  | "range-change"
+  | "score";
+
+export interface SimEvent {
+  type: SimEventType;
+  atMs: number;
+  ability?: AbilityId;
+  reason?: string;
+  detail?: string;
+}
+
+export interface ActiveCast {
+  ability: AbilityId;
+  startedAtMs: number;
+  completesAtMs: number;
+}
+
+export interface SimulatorState {
+  nowMs: number;
+  gcdReadyAtMs: number;
+  nextAutoAtMs: number;
+  nextMeleeAtMs: number;
+  activeCast: ActiveCast | null;
+  queuedAbility: AbilityId | null;
+}

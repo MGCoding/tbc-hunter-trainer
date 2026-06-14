@@ -30,6 +30,7 @@ export interface PracticeLayout {
   playerRadius: number;
   targetRadius: number;
   targetY: number;
+  maxRangedRingRadius: number;
   hud: HudLayout;
 }
 
@@ -51,9 +52,15 @@ function remainingProgress(nowMs: number, nextAtMs: number, durationMs: number):
 
 export function calculatePracticeLayout(width: number, height: number): PracticeLayout {
   const topMargin = height < 260 ? 12 : 16;
+  const rangeRingMargin = height < 180 ? 4 : height < 320 ? 8 : 16;
   const targetRadius = clamp(height * 0.044, 10, MAX_TARGET_RADIUS);
   const availableTargetSpace = Math.max(0, height / 2 - targetRadius - topMargin);
-  const yardPx = Math.min(MAX_YARD_PX, availableTargetSpace / TARGET_YARDS);
+  const availableRingRadius = Math.max(0, Math.min(width, height) / 2 - rangeRingMargin);
+  const yardPx = Math.min(
+    MAX_YARD_PX,
+    availableTargetSpace / TARGET_YARDS,
+    availableRingRadius / MOVEMENT.maximumRangedRangeYards,
+  );
   const playerRadius = clamp(yardPx * 0.42, 9, MAX_PLAYER_RADIUS);
   const compactHud = height < 320 || width < 360;
   const barWidth = Math.min(compactHud ? 220 : MAX_BAR_WIDTH, Math.max(148, width - 40));
@@ -70,6 +77,7 @@ export function calculatePracticeLayout(width: number, height: number): Practice
     playerRadius,
     targetRadius,
     targetY: -TARGET_YARDS * yardPx,
+    maxRangedRingRadius: MOVEMENT.maximumRangedRangeYards * yardPx,
     hud: {
       top,
       left: width / 2 - barWidth / 2,

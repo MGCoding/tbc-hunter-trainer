@@ -18,9 +18,16 @@ function expectTargetAndHudVisible(width: number, height: number, margin: number
   expect(layout.hud.top + layout.hud.totalHeight).toBeLessThanOrEqual(height - margin);
 }
 
+function expectMaxRangedRingVisible(width: number, height: number, margin: number): void {
+  const layout = calculatePracticeLayout(width, height);
+
+  expect(layout.maxRangedRingRadius).toBeLessThanOrEqual(Math.min(width, height) / 2 - margin);
+}
+
 describe("PracticeScene layout", () => {
   it("keeps the target and HUD stack visible on mobile portrait surfaces", () => {
     expectTargetAndHudVisible(390, 439, 8);
+    expectMaxRangedRingVisible(390, 439, 8);
   });
 
   it("keeps compact HUD bars inside short landscape surfaces at CSS-derived height", () => {
@@ -29,15 +36,15 @@ describe("PracticeScene layout", () => {
 
     expect(layout.hud.width).toBeLessThan(260);
     expectTargetAndHudVisible(844, height, 8);
+    expectMaxRangedRingVisible(844, height, 8);
   });
 
   it("keeps the target circle visible on tiny canvases", () => {
     expectTargetAndHudVisible(844, Math.round(203 * 0.52), 4);
+    expectMaxRangedRingVisible(844, Math.round(203 * 0.52), 4);
   });
 
-  it("caps yard scale on desktop-sized practice fields", () => {
-    const layout = calculatePracticeLayout(900, 800);
-
-    expect(layout.yardPx).toBe(34);
+  it("keeps the maximum ranged ring visible on desktop-sized practice fields", () => {
+    expectMaxRangedRingVisible(900, 800, 16);
   });
 });

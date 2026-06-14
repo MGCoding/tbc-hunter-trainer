@@ -6,6 +6,8 @@ export interface BrowserInputHandlers {
   onAbilityPress(action: AbilityActionId): void;
 }
 
+export type KeybindingSource = KeybindingMap | (() => KeybindingMap);
+
 type BrowserInputTarget = Pick<EventTarget, "addEventListener" | "removeEventListener">;
 
 const MOVEMENT_ACTION_KEYS = {
@@ -15,8 +17,21 @@ const MOVEMENT_ACTION_KEYS = {
   strafeRight: "right",
 } as const satisfies Partial<Record<ActionId, keyof MovementKeys>>;
 
+const ABILITY_ACTIONS = {
+  arcaneShot: true,
+  killCommand: true,
+  multiShot: true,
+  steadyShot: true,
+  raptorStrike: true,
+  autoShot: true,
+} as const satisfies Record<AbilityActionId, true>;
+
+function getBindings(source: KeybindingSource): KeybindingMap {
+  return typeof source === "function" ? source() : source;
+}
+
 function isAbilityAction(action: ActionId): action is AbilityActionId {
-  return !(action in MOVEMENT_ACTION_KEYS);
+  return action in ABILITY_ACTIONS;
 }
 
 function movementKeyForAction(action: ActionId): keyof MovementKeys | null {
@@ -33,7 +48,7 @@ function makeMouseBinding(event: MouseEvent): KeyBinding {
 
 export function attachBrowserInput(
   target: BrowserInputTarget,
-  bindings: KeybindingMap,
+  bindingsOrGetBindings: KeybindingSource,
   handlers: BrowserInputHandlers,
 ): () => void {
   const movementKeys: MovementKeys = {
@@ -57,7 +72,7 @@ export function attachBrowserInput(
       return;
     }
 
-    const action = findActionForBinding(bindings, makeKeyboardBinding(event));
+    const action = findActionForBinding(getBindings(bindingsOrGetBindings), makeKeyboardBinding(event));
     if (action === null) {
       return;
     }
@@ -80,7 +95,7 @@ export function attachBrowserInput(
       return;
     }
 
-    const action = findActionForBinding(bindings, makeKeyboardBinding(event));
+    const action = findActionForBinding(getBindings(bindingsOrGetBindings), makeKeyboardBinding(event));
     if (action === null) {
       return;
     }
@@ -98,7 +113,7 @@ export function attachBrowserInput(
       return;
     }
 
-    const action = findActionForBinding(bindings, makeMouseBinding(event));
+    const action = findActionForBinding(getBindings(bindingsOrGetBindings), makeMouseBinding(event));
     if (action === null) {
       return;
     }

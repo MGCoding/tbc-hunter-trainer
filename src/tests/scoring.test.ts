@@ -135,6 +135,21 @@ describe("scoring", () => {
     expect(result.mistakes.map((mistake) => mistake.label)).toContain("Unexpected arcaneShot");
   });
 
+  it("recovers when a later ideal event matches after a missed event", () => {
+    const ideal = expandRotationPattern(getRotationPreset("one-one"));
+    const events: SimEvent[] = [
+      { type: "cast-start", atMs: ideal[1].idealAtMs, ability: ideal[1].ability },
+    ];
+
+    const result = scoreEvents(ideal, events);
+    const labels = result.mistakes.map((mistake) => mistake.label);
+
+    expect(labels).toContain("Auto missed");
+    expect(labels).not.toContain(`Unexpected ${ideal[1].ability}`);
+    expect(labels).not.toContain("Steady missed");
+    expect(result.nextExpected).toBeNull();
+  });
+
   it("does not advance nextExpected for wrong scoring events", () => {
     const ideal = expandRotationPattern(getRotationPreset("one-one"));
     const result = scoreEvents(ideal, [{ type: "cast-start", atMs: ideal[0].idealAtMs, ability: "arcaneShot" }]);
@@ -152,6 +167,16 @@ describe("scoring", () => {
     ];
 
     expect(scoreEvents(ideal, events).efficiency).toBe(100);
+  });
+
+  it("classifies out-of-range Kill Command only as out of range", () => {
+    const result = scoreEvents([], [
+      { type: "invalid-input", atMs: 1000, ability: "killCommand", reason: "out-of-range" },
+    ]);
+    const labels = result.mistakes.map((mistake) => mistake.label);
+
+    expect(labels).toEqual(["killCommand out of range"]);
+    expect(labels).not.toContain("Invalid Kill Command");
   });
 
   it("matches the first ideal Auto Shot against simulator auto-fire output", () => {

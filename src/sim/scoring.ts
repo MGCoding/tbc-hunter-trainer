@@ -1,6 +1,7 @@
 import type { AbilityId, IdealEvent, ScoreMistake, ScoreResult, SimEvent } from "./types";
 
 const TIMING_TOLERANCE_MS = 100;
+const IDEAL_LOOKAHEAD_COUNT = 3;
 
 type ScoreableEvent = SimEvent & { ability: AbilityId };
 
@@ -39,6 +40,17 @@ function findFutureExpectedAbility(event: SimEvent, ideal: IdealEvent[]): IdealE
   return ideal.find((expected) => expected.ability === event.ability && expected.idealAtMs > event.atMs);
 }
 
+function findLookaheadMatch(ideal: IdealEvent[], startIndex: number, actual: ScoreableEvent): number {
+  const endIndex = Math.min(ideal.length, startIndex + IDEAL_LOOKAHEAD_COUNT + 1);
+  for (let index = startIndex + 1; index < endIndex; index += 1) {
+    const expected = ideal[index];
+    if (expected.ability === actual.ability && Math.abs(actual.atMs - expected.idealAtMs) <= TIMING_TOLERANCE_MS) {
+      return index;
+    }
+  }
+  return -1;
+}
+
 export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResult {
   const mistakes: ScoreMistake[] = [];
   const scoreableEvents = events.filter(isScoreableEvent).sort(compareScoreableEvents);
@@ -51,6 +63,16 @@ export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResul
     const expected = ideal[idealIndex];
     const actual = scoreableEvents[actualIndex];
     if (actual.ability !== expected.ability) {
+      const lookaheadIndex = findLookaheadMatch(ideal, idealIndex, actual);
+      if (lookaheadIndex !== -1) {
+        for (const skipped of ideal.slice(idealIndex, lookaheadIndex)) {
+          mistakes.push({ atMs: skipped.idealAtMs, label: `${skipped.label} missed`, penalty: 8 });
+        }
+        addTimingMistake(mistakes, ideal[lookaheadIndex], actual);
+        idealIndex = lookaheadIndex + 1;
+        actualIndex += 1;
+        continue;
+      }
       mistakes.push({ atMs: actual.atMs, label: `Unexpected ${actual.ability}`, penalty: 10 });
       actualIndex += 1;
       continue;
@@ -76,7 +98,7 @@ export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResul
       }
       mistakes.push({ atMs: event.atMs, label: "Auto clipped", penalty: 15 });
     }
-    if (event.type === "invalid-input" && event.ability === "killCommand") {
+    if (event.type === "invalid-input" && event.ability === "killCommand" && event.reason === "kill-command-during-steady") {
       mistakes.push({ atMs: event.atMs, label: "Invalid Kill Command", penalty: 6 });
     }
     if (event.type === "invalid-input" && event.reason === "melee-action-not-ready") {

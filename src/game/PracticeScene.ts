@@ -90,6 +90,14 @@ export function calculatePracticeLayout(width: number, height: number): Practice
   };
 }
 
+export function getPracticeGridStep(layout: Pick<PracticeLayout, "yardPx">): number {
+  return GRID_YARDS * layout.yardPx;
+}
+
+export function canDrawPracticeField(width: number, height: number, layout: Pick<PracticeLayout, "yardPx">): boolean {
+  return width > 0 && height > 0 && Number.isFinite(getPracticeGridStep(layout)) && getPracticeGridStep(layout) > 0;
+}
+
 export class PracticeScene extends Phaser.Scene {
   private preset!: RotationPreset;
   private getSimulatorState!: () => SimulatorState;
@@ -150,9 +158,12 @@ export class PracticeScene extends Phaser.Scene {
     const halfW = width / 2;
     const halfH = height / 2;
     const layout = calculatePracticeLayout(width, height);
-    const gridStep = GRID_YARDS * layout.yardPx;
+    const gridStep = getPracticeGridStep(layout);
 
     this.field.clear();
+    if (!canDrawPracticeField(width, height, layout)) {
+      return;
+    }
 
     this.field.lineStyle(1, 0xf4f2ed, 0.08);
     for (let x = -halfW; x <= halfW; x += gridStep) {

@@ -8,7 +8,7 @@ vi.mock("phaser", () => ({
   },
 }));
 
-import { calculatePracticeLayout } from "../game/PracticeScene";
+import { calculatePracticeLayout, canDrawPracticeField, getPracticeGridStep } from "../game/PracticeScene";
 
 function expectTargetAndHudVisible(width: number, height: number, margin: number): void {
   const layout = calculatePracticeLayout(width, height);
@@ -46,5 +46,12 @@ describe("PracticeScene layout", () => {
 
   it("keeps the maximum ranged ring visible on desktop-sized practice fields", () => {
     expectMaxRangedRingVisible(900, 800, 16);
+  });
+
+  it("marks zero-size fields unsafe for grid drawing", () => {
+    const layout = calculatePracticeLayout(0, 0);
+
+    expect(getPracticeGridStep(layout)).toBe(0);
+    expect(canDrawPracticeField(0, 0, layout)).toBe(false);
   });
 });

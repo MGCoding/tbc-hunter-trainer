@@ -9,6 +9,8 @@ describe("App UI", () => {
   it("renders trainer controls and reference panels", () => {
     render(<App />);
 
+    expect(screen.getByTestId("phaser-host")).toBeInTheDocument();
+    expect(screen.queryByText("Practice field loads in Task 9")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Rotation")).toBeInTheDocument();
     expect(screen.getByText("Reference Rotation")).toBeInTheDocument();
     expect(screen.getByText("Diziet rotationtools")).toBeInTheDocument();

@@ -57,34 +57,21 @@ select {
 
 .practice-stage {
   min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
+  display: flex;
+  min-width: 0;
+  padding: 0;
   color: #f4f2ed;
-  background:
-    linear-gradient(rgba(244, 242, 237, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(244, 242, 237, 0.035) 1px, transparent 1px),
-    #151719;
-  background-size: 48px 48px;
+  background: #151719;
 }
 
-.stage-title {
-  width: min(420px, 100%);
-  border: 1px dashed rgba(215, 168, 74, 0.44);
-  border-radius: 8px;
-  padding: 20px;
-  text-align: center;
+.phaser-host {
+  flex: 1;
+  min-width: 0;
+  min-height: 100dvh;
 }
 
-.stage-title h1 {
-  margin: 0 0 8px;
-  font-size: 1.35rem;
-  font-weight: 700;
-}
-
-.stage-title p {
-  margin: 0;
-  color: rgba(244, 242, 237, 0.72);
+.phaser-host canvas {
+  display: block;
 }
 
 .side-panels {
@@ -260,6 +247,10 @@ select {
   }
 
   .practice-stage {
+    min-height: 52vh;
+  }
+
+  .phaser-host {
     min-height: 52vh;
   }
 

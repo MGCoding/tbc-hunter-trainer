@@ -1,7 +1,9 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { getRotationPreset } from "./data/rotations";
+import { PhaserHost } from "./game/PhaserHost";
 import { scoreEvents } from "./sim/scoring";
+import { createSimulator } from "./sim/simulator";
 import { expandRotationPattern } from "./sim/timeline";
 import type { ScoreResult, SimEvent } from "./sim/types";
 import { ControlPanel } from "./ui/ControlPanel";
@@ -16,6 +18,7 @@ export function App() {
   const [running, setRunning] = useState(false);
 
   const preset = useMemo(() => getRotationPreset(selectedPresetId), [selectedPresetId]);
+  const simulatorRef = useRef(createSimulator(preset));
   const ideal = useMemo(() => expandRotationPattern(preset), [preset]);
   const score = useMemo<ScoreResult>(() => {
     if (events.length === 0) {
@@ -23,20 +26,24 @@ export function App() {
     }
     return scoreEvents(ideal, events);
   }, [events, ideal]);
+  const getSimulatorState = useCallback(() => simulatorRef.current.getState(), []);
 
   function handlePresetChange(id: string): void {
+    simulatorRef.current = createSimulator(getRotationPreset(id));
     setRunning(false);
     setSelectedPresetId(id);
     setEvents([]);
   }
 
+  function handleStop(): void {
+    setRunning(false);
+    setEvents(simulatorRef.current.getLog());
+  }
+
   return (
     <main className="app-shell">
       <section className="practice-stage" aria-label="Practice field">
-        <div className="stage-title">
-          <h1>Melee Weaving Trainer</h1>
-          <p>Practice field loads in Task 9</p>
-        </div>
+        <PhaserHost preset={preset} getSimulatorState={getSimulatorState} />
       </section>
       <aside className="side-panels" aria-label="Trainer controls">
         <ControlPanel
@@ -45,7 +52,7 @@ export function App() {
           running={running}
           onPresetChange={handlePresetChange}
           onStart={() => setRunning(true)}
-          onStop={() => setRunning(false)}
+          onStop={handleStop}
         />
         <ReferencePanel preset={preset} />
         <EventLogPanel events={events} onReset={() => setEvents([])} />

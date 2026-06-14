@@ -36,6 +36,10 @@ function addTimingMistake(mistakes: ScoreMistake[], expected: IdealEvent, actual
   }
 }
 
+function isWithinTimingTolerance(expected: IdealEvent, actual: ScoreableEvent): boolean {
+  return Math.abs(actual.atMs - expected.idealAtMs) <= TIMING_TOLERANCE_MS;
+}
+
 function findFutureExpectedAbility(event: SimEvent, ideal: IdealEvent[]): IdealEvent | undefined {
   return ideal.find((expected) => expected.ability === event.ability && expected.idealAtMs > event.atMs);
 }
@@ -62,7 +66,7 @@ export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResul
   while (idealIndex < ideal.length && actualIndex < scoreableEvents.length) {
     const expected = ideal[idealIndex];
     const actual = scoreableEvents[actualIndex];
-    if (actual.ability !== expected.ability) {
+    if (actual.ability !== expected.ability || !isWithinTimingTolerance(expected, actual)) {
       const lookaheadIndex = findLookaheadMatch(ideal, idealIndex, actual);
       if (lookaheadIndex !== -1) {
         for (const skipped of ideal.slice(idealIndex, lookaheadIndex)) {
@@ -73,6 +77,9 @@ export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResul
         actualIndex += 1;
         continue;
       }
+    }
+
+    if (actual.ability !== expected.ability) {
       mistakes.push({ atMs: actual.atMs, label: `Unexpected ${actual.ability}`, penalty: 10 });
       actualIndex += 1;
       continue;

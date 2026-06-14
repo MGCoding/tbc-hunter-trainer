@@ -150,6 +150,24 @@ describe("scoring", () => {
     expect(result.nextExpected).toBeNull();
   });
 
+  it("recovers repeated abilities when a later ideal event matches exactly", () => {
+    const ideal = expandRotationPattern(getRotationPreset("one-two"));
+    const secondAuto = ideal.find((event, index) => index > 0 && event.ability === "autoShot")!;
+    const events: SimEvent[] = [
+      { type: "auto-fire", atMs: secondAuto.idealAtMs, ability: "autoShot" },
+    ];
+
+    const result = scoreEvents(ideal, events);
+    const labels = result.mistakes.map((mistake) => mistake.label);
+
+    expect(labels).toContain("Auto missed");
+    expect(labels).toContain("Steady missed");
+    expect(labels).not.toContain(`Auto ${Math.round(secondAuto.idealAtMs - ideal[0].idealAtMs)}ms late`);
+    expect(labels).not.toContain("Unexpected autoShot");
+    expect(labels.filter((label) => label === "Auto missed")).toHaveLength(1);
+    expect(result.nextExpected).toBeNull();
+  });
+
   it("does not advance nextExpected for wrong scoring events", () => {
     const ideal = expandRotationPattern(getRotationPreset("one-one"));
     const result = scoreEvents(ideal, [{ type: "cast-start", atMs: ideal[0].idealAtMs, ability: "arcaneShot" }]);

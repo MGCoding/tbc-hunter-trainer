@@ -1,6 +1,5 @@
-import { TIMING } from "../data/constants";
-import { getAbilityTiming } from "./abilities";
-import type { AbilityId, IdealEvent, RotationPreset, RotationToken } from "./types";
+import { createSimulator } from "./simulator";
+import type { AbilityId, IdealEvent, RotationPreset, RotationToken, SimEvent } from "./types";
 
 const TOKEN_TO_ABILITY: Record<RotationToken, AbilityId> = {
   a: "autoShot",
@@ -28,48 +27,61 @@ export function parseRotationTokens(pattern: string): RotationToken[] {
 }
 
 export function expandRotationPattern(preset: RotationPreset): IdealEvent[] {
-  let currentMs = 0;
-  let gcdReadyAt = 0;
-  let nextAutoAt = preset.targetRangedSwingMs;
-  let raptorReadyAt = 0;
-  let meleeReadyAt = 0;
+  const sim = createSimulator(preset);
 
   return parseRotationTokens(preset.pattern).map((token, index) => {
-    let ability = TOKEN_TO_ABILITY[token];
-    if (token === "w") {
-      ability = currentMs >= raptorReadyAt ? "raptorStrike" : "meleeSwing";
-    }
-
-    const timing = getAbilityTiming(ability, preset);
-    let start = Math.max(currentMs, timing.usesGcd ? gcdReadyAt : currentMs);
     if (token === "a") {
-      start = Math.max(currentMs, nextAutoAt);
-    } else if (ability === "meleeSwing") {
-      start = Math.max(currentMs, meleeReadyAt);
+      const event = tickUntilNextAutoFire(sim);
+      return {
+        index,
+        token,
+        ability: "autoShot",
+        label: TOKEN_TO_LABEL[token],
+        idealAtMs: event.atMs,
+      };
     }
 
-    const event: IdealEvent = {
+    const event = pressTokenAction(sim, token);
+
+    return {
       index,
       token,
-      ability,
+      ability: event.ability,
       label: TOKEN_TO_LABEL[token],
-      idealAtMs: start,
+      idealAtMs: event.atMs,
     };
-
-    if (token === "a") {
-      nextAutoAt = start + preset.targetRangedSwingMs;
-    }
-    if (timing.usesGcd) {
-      gcdReadyAt = start + TIMING.gcdMs;
-    }
-    if (ability === "raptorStrike") {
-      raptorReadyAt = start + TIMING.raptorCooldownMs;
-    }
-    if (ability === "meleeSwing") {
-      meleeReadyAt = start + preset.derivedMeleeSwingMs;
-    }
-    currentMs = token === "a" ? start : start + timing.castMs;
-
-    return event;
   });
+}
+
+function tickUntilNextAutoFire(sim: ReturnType<typeof createSimulator>): SimEvent & { ability: "autoShot" } {
+  const previousAutoCount = sim.getLog().filter((event) => event.type === "auto-fire").length;
+
+  while (true) {
+    sim.tick(sim.getState().nextAutoAtMs);
+    const autoFires = sim.getLog().filter((event): event is SimEvent & { ability: "autoShot" } => {
+      return event.type === "auto-fire" && event.ability === "autoShot";
+    });
+    if (autoFires.length > previousAutoCount) {
+      return autoFires[autoFires.length - 1];
+    }
+  }
+}
+
+function pressTokenAction(sim: ReturnType<typeof createSimulator>, token: Exclude<RotationToken, "a">): SimEvent & { ability: AbilityId } {
+  const logLength = sim.getLog().length;
+  const state = sim.getState();
+
+  if (token === "w") {
+    sim.pressAbility("raptorStrike", Math.max(state.nowMs, Math.min(state.raptorReadyAtMs, state.nextMeleeAtMs)));
+  } else {
+    sim.pressAbility(TOKEN_TO_ABILITY[token], Math.max(state.nowMs, state.gcdReadyAtMs));
+  }
+
+  const event = sim.getLog().slice(logLength).find((entry): entry is SimEvent & { ability: AbilityId } => {
+    return entry.type === "cast-start" && entry.ability !== undefined;
+  });
+  if (!event) {
+    throw new Error(`Could not resolve rotation token: ${token}`);
+  }
+  return event;
 }

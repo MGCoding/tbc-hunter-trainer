@@ -38,6 +38,9 @@ function addTimingMistake(mistakes: ScoreMistake[], expected: IdealEvent, actual
 export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResult {
   const mistakes: ScoreMistake[] = [];
   const scoreableEvents = events.filter(isScoreableEvent).sort(compareScoreableEvents);
+  const idealAutoFireTimes = new Set(
+    ideal.filter((event) => event.ability === "autoShot").map((event) => event.idealAtMs),
+  );
 
   let idealIndex = 0;
   let actualIndex = 0;
@@ -66,10 +69,19 @@ export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResul
 
   for (const event of events) {
     if (event.type === "auto-clipped") {
+      const clippedAutoResolvedInIdeal = events.some((candidate) => {
+        return candidate.type === "auto-fire" && candidate.ability === "autoShot" && candidate.atMs > event.atMs && idealAutoFireTimes.has(candidate.atMs);
+      });
+      if (clippedAutoResolvedInIdeal) {
+        continue;
+      }
       mistakes.push({ atMs: event.atMs, label: "Auto clipped", penalty: 15 });
     }
     if (event.type === "invalid-input" && event.ability === "killCommand") {
       mistakes.push({ atMs: event.atMs, label: "Invalid Kill Command", penalty: 6 });
+    }
+    if (event.type === "invalid-input" && event.reason === "melee-action-not-ready") {
+      mistakes.push({ atMs: event.atMs, label: "Melee action not ready", penalty: 6 });
     }
     if (event.type === "invalid-input" && event.reason === "out-of-range") {
       mistakes.push({ atMs: event.atMs, label: `${event.ability ?? "Ability"} out of range`, penalty: 8 });

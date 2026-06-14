@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getRotationPreset } from "../data/rotations";
+import { getRotationPreset, ROTATION_PRESETS } from "../data/rotations";
 import { scoreEvents } from "../sim/scoring";
 import { createSimulator } from "../sim/simulator";
-import { expandRotationPattern } from "../sim/timeline";
-import type { IdealEvent, SimEvent } from "../sim/types";
+import { expandRotationPattern, parseRotationTokens } from "../sim/timeline";
+import type { AbilityId, IdealEvent, RotationPreset, RotationToken, SimEvent } from "../sim/types";
 
 function toPerfectEvents(ideal: IdealEvent[]): SimEvent[] {
   return ideal.map((event) => ({
@@ -11,6 +11,37 @@ function toPerfectEvents(ideal: IdealEvent[]): SimEvent[] {
     atMs: event.idealAtMs,
     ability: event.ability,
   }));
+}
+
+const TOKEN_TO_ACTION: Record<Exclude<RotationToken, "a" | "w">, AbilityId> = {
+  s: "steadyShot",
+  m: "multiShot",
+  A: "arcaneShot",
+};
+
+function drivePresetThroughSimulator(preset: RotationPreset): SimEvent[] {
+  const sim = createSimulator(preset);
+
+  for (const token of parseRotationTokens(preset.pattern)) {
+    if (token === "a") {
+      const autoCount = sim.getLog().filter((event) => event.type === "auto-fire").length;
+      while (sim.getLog().filter((event) => event.type === "auto-fire").length === autoCount) {
+        sim.tick(sim.getState().nextAutoAtMs);
+      }
+      continue;
+    }
+
+    const state = sim.getState();
+    if (token === "w") {
+      const atMs = Math.max(state.nowMs, Math.min(state.raptorReadyAtMs, state.nextMeleeAtMs));
+      sim.pressAbility("raptorStrike", atMs);
+      continue;
+    }
+
+    sim.pressAbility(TOKEN_TO_ACTION[token], Math.max(state.nowMs, state.gcdReadyAtMs));
+  }
+
+  return sim.getLog();
 }
 
 describe("scoring", () => {
@@ -32,6 +63,15 @@ describe("scoring", () => {
     expect(result.efficiency).toBeLessThan(100);
     expect(result.mistakes.map((mistake) => mistake.label)).toContain("Auto clipped");
     expect(result.mistakes.map((mistake) => mistake.label)).toContain("Invalid Kill Command");
+  });
+
+  it("penalizes melee actions pressed before Raptor or white swing is ready", () => {
+    const result = scoreEvents([], [
+      { type: "invalid-input", atMs: 1000, ability: "raptorStrike", reason: "melee-action-not-ready" },
+    ]);
+
+    expect(result.efficiency).toBeLessThan(100);
+    expect(result.mistakes.map((mistake) => mistake.label)).toContain("Melee action not ready");
   });
 
   it("scores chronological raw event arrays by relevant event time", () => {
@@ -116,5 +156,30 @@ describe("scoring", () => {
 
     expect(result.mistakes).toEqual([]);
     expect(result.efficiency).toBe(100);
+  });
+
+  it("scores simulator-driven playback for every preset without timeline mistakes", () => {
+    for (const preset of ROTATION_PRESETS) {
+      const ideal = expandRotationPattern(preset);
+      const result = scoreEvents(ideal, drivePresetThroughSimulator(preset));
+
+      expect(result.mistakes, preset.id).toEqual([]);
+      expect(result.efficiency, preset.id).toBe(100);
+    }
+  });
+
+  it("matches delayed Auto Shots after Multi-Shot clipping", () => {
+    const preset = getRotationPreset("french-weaving-5511-3w");
+    const ideal = expandRotationPattern(preset);
+    const log = drivePresetThroughSimulator(preset);
+    const clippedAuto = log.find((event) => event.type === "auto-clipped" && event.ability === "autoShot");
+    const delayedAuto = log.find(
+      (event) => event.type === "auto-fire" && clippedAuto !== undefined && event.atMs > clippedAuto.atMs,
+    );
+
+    expect(clippedAuto).toBeDefined();
+    expect(delayedAuto).toBeDefined();
+    expect(ideal.some((event) => event.ability === "autoShot" && event.idealAtMs === delayedAuto!.atMs)).toBe(true);
+    expect(scoreEvents(ideal, log).mistakes).toEqual([]);
   });
 });

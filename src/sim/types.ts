@@ -126,3 +126,15 @@ export interface SimulatorState {
   activeCast: ActiveCast | null;
   queuedAbility: AbilityId | null;
 }
+
+export interface ScoreMistake {
+  atMs: number;
+  label: string;
+  penalty: number;
+}
+
+export interface ScoreResult {
+  efficiency: number;
+  mistakes: ScoreMistake[];
+  nextExpected: IdealEvent | null;
+}

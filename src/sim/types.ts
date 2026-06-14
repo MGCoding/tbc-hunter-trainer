@@ -50,3 +50,26 @@ export type ActionId =
   | "autoShot";
 
 export type AbilityActionId = Exclude<ActionId, "moveForward" | "moveBackward" | "strafeLeft" | "strafeRight">;
+
+export interface Vector2 {
+  x: number;
+  y: number;
+}
+
+export interface PracticePosition {
+  player: Vector2;
+  target: Vector2;
+}
+
+export interface MovementKeys {
+  forward: boolean;
+  backward: boolean;
+  left: boolean;
+  right: boolean;
+}
+
+export interface RangeState {
+  distanceYards: number;
+  canMelee: boolean;
+  canUseRanged: boolean;
+}

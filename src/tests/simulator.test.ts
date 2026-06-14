@@ -35,6 +35,17 @@ describe("simulator", () => {
     expect(sim.getLog().some((event) => event.type === "cast-start" && event.ability === "steadyShot")).toBe(true);
   });
 
+  it("processes every Auto Shot due within a large tick", () => {
+    const sim = createSimulator(getRotationPreset("one-one"));
+    const firstAuto = sim.getState().nextAutoAtMs;
+    sim.tick(firstAuto * 3 + 1);
+    const autoFireEvents = sim.getLog().filter((event) => event.type === "auto-fire");
+    const autoFireTimes = autoFireEvents.map((event) => event.atMs);
+    expect(autoFireEvents.length).toBeGreaterThanOrEqual(3);
+    expect(autoFireTimes).toEqual([...autoFireTimes].sort((a, b) => a - b));
+    expect(sim.getState().nextAutoAtMs).toBeGreaterThan(sim.getState().nowMs);
+  });
+
   it("clips Auto Shot when Multi-Shot is still casting at no-move/no-cast spark", () => {
     const sim = createSimulator(getRotationPreset("french-weaving-5511-3w"));
     const spark = sim.getState().nextAutoAtMs - 500;

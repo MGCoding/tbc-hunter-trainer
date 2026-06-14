@@ -110,27 +110,32 @@ export class Simulator {
   }
 
   private processAutoWindow(toMs: number): void {
-    const sparkAt = this.state.nextAutoAtMs - TIMING.noMoveNoCastLeadMs;
-    const active = this.state.activeCast;
-    if (active && active.ability === "multiShot" && active.completesAtMs > sparkAt && toMs >= this.state.nextAutoAtMs) {
-      this.log.add({
-        type: "auto-clipped",
-        atMs: this.state.nextAutoAtMs,
-        ability: "autoShot",
-        reason: "casting-at-spark",
-      });
-      this.state.nextAutoAtMs += active.completesAtMs - sparkAt;
-      return;
-    }
+    while (toMs >= this.state.nextAutoAtMs) {
+      const currentAutoAtMs = this.state.nextAutoAtMs;
+      const sparkAt = currentAutoAtMs - TIMING.noMoveNoCastLeadMs;
+      const active = this.state.activeCast;
 
-    if (toMs >= this.state.nextAutoAtMs) {
-      this.log.add({
-        type: "auto-windup",
-        atMs: this.state.nextAutoAtMs - TIMING.autoWindupMs / this.preset.hasteFactor,
-        ability: "autoShot",
-      });
-      this.log.add({ type: "auto-fire", atMs: this.state.nextAutoAtMs, ability: "autoShot" });
-      this.state.nextAutoAtMs += this.preset.targetRangedSwingMs;
+      if (active && active.ability === "multiShot" && active.completesAtMs > sparkAt) {
+        this.log.add({
+          type: "auto-clipped",
+          atMs: currentAutoAtMs,
+          ability: "autoShot",
+          reason: "casting-at-spark",
+        });
+        this.state.nextAutoAtMs += active.completesAtMs - sparkAt;
+      } else {
+        this.log.add({
+          type: "auto-windup",
+          atMs: currentAutoAtMs - TIMING.autoWindupMs / this.preset.hasteFactor,
+          ability: "autoShot",
+        });
+        this.log.add({ type: "auto-fire", atMs: currentAutoAtMs, ability: "autoShot" });
+        this.state.nextAutoAtMs += this.preset.targetRangedSwingMs;
+      }
+
+      if (this.state.nextAutoAtMs <= currentAutoAtMs) {
+        this.state.nextAutoAtMs = currentAutoAtMs + this.preset.targetRangedSwingMs;
+      }
     }
   }
 }

@@ -58,6 +58,29 @@ describe("simulator", () => {
     expect(sim.getLog().some((event) => event.type === "auto-fire" && event.atMs === autoDue)).toBe(false);
   });
 
+  it("keeps log events in non-decreasing timestamp order for queued Multi-Shot clipping", () => {
+    const sim = createSimulator(getRotationPreset("one-one"));
+    const autoDue = sim.getState().nextAutoAtMs;
+    sim.pressAbility("steadyShot", 0);
+    sim.pressAbility("multiShot", 1450);
+    sim.tick(autoDue);
+    const timestamps = sim.getLog().map((event) => event.atMs);
+    expect(timestamps).toEqual([...timestamps].sort((a, b) => a - b));
+  });
+
+  it("returns log snapshots that cannot mutate internal log events", () => {
+    const sim = createSimulator(getRotationPreset("one-one"));
+    sim.pressAbility("steadyShot", 0);
+    const snapshot = sim.getLog();
+    snapshot[0].atMs = 999999;
+    snapshot[0].type = "score";
+    expect(sim.getLog()[0]).toMatchObject({
+      type: "ability-press",
+      atMs: 0,
+      ability: "steadyShot",
+    });
+  });
+
   it("blocks Kill Command during Steady Shot", () => {
     const sim = createSimulator(getRotationPreset("one-one"));
     sim.pressAbility("steadyShot", 0);

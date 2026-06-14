@@ -1,18 +1,26 @@
 import { useEffect, useRef } from "react";
 import type { Game as PhaserGame, Types as PhaserTypes } from "phaser";
 
-import { DEFAULT_KEYBINDS } from "../data/constants";
 import { attachBrowserInput } from "../input/browserInput";
-import type { AbilityActionId } from "../sim/types";
-import type { RotationPreset, SimulatorState } from "../sim/types";
+import type { KeybindingMap } from "../input/keybindings";
+import type { AbilityActionId, MovementKeys } from "../sim/types";
+import type { PracticeState, RotationPreset } from "../sim/types";
 
 interface PhaserHostProps {
   preset: RotationPreset;
-  getSimulatorState: () => SimulatorState;
+  getPracticeState: () => PracticeState;
+  getKeybindings: () => KeybindingMap;
+  onMovementChange: (keys: MovementKeys) => void;
   onAbilityPress: (action: AbilityActionId) => void;
 }
 
-export function PhaserHost({ preset, getSimulatorState, onAbilityPress }: PhaserHostProps) {
+export function PhaserHost({
+  preset,
+  getPracticeState,
+  getKeybindings,
+  onMovementChange,
+  onAbilityPress,
+}: PhaserHostProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<PhaserGame | null>(null);
 
@@ -23,11 +31,11 @@ export function PhaserHost({ preset, getSimulatorState, onAbilityPress }: Phaser
     }
 
     parent.focus();
-    return attachBrowserInput(document, DEFAULT_KEYBINDS, {
-      onMovementChange: () => undefined,
+    return attachBrowserInput(document, getKeybindings, {
+      onMovementChange,
       onAbilityPress,
     });
-  }, [onAbilityPress]);
+  }, [getKeybindings, onAbilityPress, onMovementChange]);
 
   useEffect(() => {
     const parent = parentRef.current;
@@ -60,7 +68,7 @@ export function PhaserHost({ preset, getSimulatorState, onAbilityPress }: Phaser
 
       const game = new Phaser.Game(config);
       gameRef.current = game;
-      game.scene.add("PracticeScene", PracticeScene, true, { preset, getSimulatorState });
+      game.scene.add("PracticeScene", PracticeScene, true, { preset, getPracticeState });
     }
 
     void createGame();
@@ -70,7 +78,7 @@ export function PhaserHost({ preset, getSimulatorState, onAbilityPress }: Phaser
       gameRef.current?.destroy(true);
       gameRef.current = null;
     };
-  }, [preset, getSimulatorState]);
+  }, [preset, getPracticeState]);
 
   return <div ref={parentRef} className="phaser-host" data-testid="phaser-host" tabIndex={0} />;
 }

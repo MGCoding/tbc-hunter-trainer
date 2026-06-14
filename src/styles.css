@@ -214,12 +214,38 @@ select {
   font-size: 0.9rem;
 }
 
+.keybinding-list {
+  display: grid;
+  gap: 6px;
+}
+
+.keybinding-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid rgba(244, 242, 237, 0.08);
+  padding: 6px 0;
+  font-size: 0.84rem;
+}
+
+.keybinding-row span {
+  min-width: 0;
+}
+
+.keybinding-row strong {
+  color: #f5df9f;
+  font-size: 0.82rem;
+}
+
 .event-list {
   display: grid;
   gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
+  max-height: 280px;
+  overflow-y: auto;
 }
 
 .event-list li {

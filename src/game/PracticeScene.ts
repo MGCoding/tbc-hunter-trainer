@@ -1,11 +1,11 @@
 import Phaser from "phaser";
 
 import { MOVEMENT, TIMING } from "../data/constants";
-import type { RotationPreset, SimulatorState } from "../sim/types";
+import type { PracticePosition, PracticeState, RotationPreset, SimulatorState } from "../sim/types";
 
 export interface PracticeSceneData {
   preset: RotationPreset;
-  getSimulatorState: () => SimulatorState;
+  getPracticeState: () => PracticeState;
 }
 
 const MAX_YARD_PX = 34;
@@ -100,10 +100,11 @@ export function canDrawPracticeField(width: number, height: number, layout: Pick
 
 export class PracticeScene extends Phaser.Scene {
   private preset!: RotationPreset;
-  private getSimulatorState!: () => SimulatorState;
+  private getPracticeState!: () => PracticeState;
   private field!: Phaser.GameObjects.Graphics;
   private hud!: Phaser.GameObjects.Graphics;
   private castLabel!: Phaser.GameObjects.Text;
+  private distanceLabel!: Phaser.GameObjects.Text;
 
   constructor() {
     super("PracticeScene");
@@ -111,7 +112,7 @@ export class PracticeScene extends Phaser.Scene {
 
   init(data: PracticeSceneData): void {
     this.preset = data.preset;
-    this.getSimulatorState = data.getSimulatorState;
+    this.getPracticeState = data.getPracticeState;
   }
 
   create(): void {
@@ -130,15 +131,25 @@ export class PracticeScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
+    this.distanceLabel = this.add
+      .text(0, 0, "", {
+        color: "#f4f2ed",
+        fontFamily: "Inter, Arial, sans-serif",
+        fontSize: "12px",
+        fontStyle: "700",
+      })
+      .setOrigin(0.5);
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
-    this.drawField();
+    this.drawField(this.getPracticeState());
   }
 
   update(): void {
+    const state = this.getPracticeState();
     this.cameras.main.centerOn(0, 0);
-    this.drawHud(this.getSimulatorState());
+    this.drawField(state);
+    this.drawHud(state.simulator);
   }
 
   shutdown(): void {
@@ -148,10 +159,17 @@ export class PracticeScene extends Phaser.Scene {
   private handleResize(gameSize: Phaser.Structs.Size): void {
     this.cameras.main.setViewport(0, 0, gameSize.width, gameSize.height);
     this.cameras.main.centerOn(0, 0);
-    this.drawField();
+    this.drawField(this.getPracticeState());
   }
 
-  private drawField(): void {
+  private getTargetOffset(position: PracticePosition, yardPx: number): { x: number; y: number } {
+    return {
+      x: (position.target.x - position.player.x) * yardPx,
+      y: (position.target.y - position.player.y) * yardPx,
+    };
+  }
+
+  private drawField(state: PracticeState): void {
     const camera = this.cameras.main;
     const width = camera.width;
     const height = camera.height;
@@ -164,6 +182,8 @@ export class PracticeScene extends Phaser.Scene {
     if (!canDrawPracticeField(width, height, layout)) {
       return;
     }
+
+    const targetOffset = this.getTargetOffset(state.position, layout.yardPx);
 
     this.field.lineStyle(1, 0xf4f2ed, 0.08);
     for (let x = -halfW; x <= halfW; x += gridStep) {
@@ -183,15 +203,25 @@ export class PracticeScene extends Phaser.Scene {
     this.field.strokeCircle(0, 0, MOVEMENT.minimumRangedRangeYards * layout.yardPx);
 
     this.field.lineStyle(2, 0xf4f2ed, 0.24);
-    this.field.lineBetween(0, 0, 0, layout.targetY);
+    this.field.lineBetween(0, 0, targetOffset.x, targetOffset.y);
 
     this.field.fillStyle(0x27323b, 1);
-    this.field.fillCircle(0, layout.targetY, layout.targetRadius);
+    this.field.fillCircle(targetOffset.x, targetOffset.y, layout.targetRadius);
     this.field.lineStyle(2, 0xd9664f, 0.9);
-    this.field.strokeCircle(0, layout.targetY, layout.targetRadius);
+    this.field.strokeCircle(targetOffset.x, targetOffset.y, layout.targetRadius);
     this.field.lineStyle(2, 0xd9664f, 0.45);
-    this.field.lineBetween(-layout.targetRadius - 8, layout.targetY, layout.targetRadius + 8, layout.targetY);
-    this.field.lineBetween(0, layout.targetY - layout.targetRadius - 8, 0, layout.targetY + layout.targetRadius + 8);
+    this.field.lineBetween(
+      targetOffset.x - layout.targetRadius - 8,
+      targetOffset.y,
+      targetOffset.x + layout.targetRadius + 8,
+      targetOffset.y,
+    );
+    this.field.lineBetween(
+      targetOffset.x,
+      targetOffset.y - layout.targetRadius - 8,
+      targetOffset.x,
+      targetOffset.y + layout.targetRadius + 8,
+    );
 
     this.field.fillStyle(0xd7a84a, 1);
     this.field.fillCircle(0, 0, layout.playerRadius);
@@ -199,6 +229,9 @@ export class PracticeScene extends Phaser.Scene {
     this.field.strokeCircle(0, 0, layout.playerRadius);
     this.field.fillStyle(0x151719, 0.86);
     this.field.fillTriangle(0, -layout.playerRadius - 12, -7, -layout.playerRadius + 2, 7, -layout.playerRadius + 2);
+
+    this.distanceLabel.setPosition(targetOffset.x / 2, targetOffset.y / 2);
+    this.distanceLabel.setText(`${state.range.distanceYards.toFixed(1)} yd`);
   }
 
   private drawHud(state: SimulatorState): void {

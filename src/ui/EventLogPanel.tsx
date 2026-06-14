@@ -10,7 +10,7 @@ function formatEventTime(atMs: number): string {
 }
 
 export function EventLogPanel({ events, onReset }: EventLogPanelProps) {
-  const latestEvents = events.slice(-8).reverse();
+  const visibleEvents = [...events].reverse();
 
   return (
     <section className="panel" aria-labelledby="event-log-panel-title">
@@ -21,9 +21,9 @@ export function EventLogPanel({ events, onReset }: EventLogPanelProps) {
         </button>
       </div>
 
-      {latestEvents.length > 0 ? (
+      {visibleEvents.length > 0 ? (
         <ol className="event-list">
-          {latestEvents.map((event, index) => (
+          {visibleEvents.map((event, index) => (
             <li key={`${event.atMs}-${event.type}-${event.ability ?? "none"}-${index}`}>
               <time>{formatEventTime(event.atMs)}</time>
               <span>{event.type}</span>

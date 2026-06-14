@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { clearSimulatorLogAtSessionNow, getSessionElapsedMs, tickSimulatorToSessionNow } from "../App";
+import {
+  clearSimulatorLogAtSessionNow,
+  getSessionElapsedMs,
+  readSimulatorStateAtSessionNow,
+  tickSimulatorToSessionNow,
+} from "../App";
 import { getRotationPreset } from "../data/rotations";
 import { createSimulator } from "../sim/simulator";
 
@@ -25,6 +30,20 @@ describe("session flow", () => {
     tickSimulatorToSessionNow(sim, 11_500, 10_000);
 
     expect(sim.getLog()).toContainEqual({ type: "cast-complete", atMs: completesAtMs, ability: "steadyShot" });
+  });
+
+  it("ticks the simulator to current session time before returning running state reads", () => {
+    const sim = createSimulator(getRotationPreset("one-one"));
+
+    sim.pressAbility("steadyShot", 0);
+    const completesAtMs = sim.getState().activeCast?.completesAtMs;
+    const firstAutoAtMs = sim.getState().nextAutoAtMs;
+    const state = readSimulatorStateAtSessionNow(sim, true, 12_600, 10_000);
+
+    expect(state.nowMs).toBe(2_600);
+    expect(state.activeCast).toBeNull();
+    expect(sim.getLog()).toContainEqual({ type: "cast-complete", atMs: completesAtMs, ability: "steadyShot" });
+    expect(sim.getLog()).toContainEqual({ type: "auto-fire", atMs: firstAutoAtMs, ability: "autoShot" });
   });
 
   it("discards deferred simulator events when resetting during a running session", () => {

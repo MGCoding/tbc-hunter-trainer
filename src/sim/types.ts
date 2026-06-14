@@ -129,6 +129,12 @@ export interface SimulatorState {
   queuedAbility: AbilityId | null;
 }
 
+export interface PracticeState {
+  simulator: SimulatorState;
+  position: PracticePosition;
+  range: RangeState;
+}
+
 export interface ScoreMistake {
   atMs: number;
   label: string;

@@ -148,6 +148,37 @@ describe("browser input adapter", () => {
     cleanup();
   });
 
+  it("releases movement keys held across rebinding", () => {
+    const target = new EventTarget();
+    const onMovementChange = vi.fn();
+    let bindings = DEFAULT_KEYBINDS;
+    const cleanup = attachBrowserInput(target, () => bindings, {
+      onMovementChange,
+      onAbilityPress: vi.fn(),
+    });
+
+    target.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyW", cancelable: true }));
+    bindings = rebindAction(bindings, "moveForward", { kind: "keyboard", code: "KeyQ" });
+    const keyUpEvent = new KeyboardEvent("keyup", { code: "KeyW", cancelable: true });
+    target.dispatchEvent(keyUpEvent);
+
+    expect(onMovementChange).toHaveBeenNthCalledWith(1, {
+      forward: true,
+      backward: false,
+      left: false,
+      right: false,
+    });
+    expect(onMovementChange).toHaveBeenNthCalledWith(2, {
+      forward: false,
+      backward: false,
+      left: false,
+      right: false,
+    });
+    expect(keyUpEvent.defaultPrevented).toBe(true);
+
+    cleanup();
+  });
+
   it("keeps static map usage working", () => {
     const target = new EventTarget();
     const onAbilityPress = vi.fn();

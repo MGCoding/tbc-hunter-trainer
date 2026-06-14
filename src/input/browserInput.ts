@@ -57,6 +57,7 @@ export function attachBrowserInput(
     left: false,
     right: false,
   };
+  const activeMovementByCode = new Map<string, keyof MovementKeys>();
 
   const setMovement = (key: keyof MovementKeys, pressed: boolean): void => {
     if (movementKeys[key] === pressed) {
@@ -81,6 +82,7 @@ export function attachBrowserInput(
 
     const movementKey = movementKeyForAction(action);
     if (movementKey !== null) {
+      activeMovementByCode.set(event.code, movementKey);
       setMovement(movementKey, true);
       return;
     }
@@ -95,6 +97,14 @@ export function attachBrowserInput(
       return;
     }
 
+    const activeMovementKey = activeMovementByCode.get(event.code);
+    if (activeMovementKey !== undefined) {
+      event.preventDefault();
+      activeMovementByCode.delete(event.code);
+      setMovement(activeMovementKey, false);
+      return;
+    }
+
     const action = findActionForBinding(getBindings(bindingsOrGetBindings), makeKeyboardBinding(event));
     if (action === null) {
       return;
@@ -104,6 +114,7 @@ export function attachBrowserInput(
 
     const movementKey = movementKeyForAction(action);
     if (movementKey !== null) {
+      activeMovementByCode.delete(event.code);
       setMovement(movementKey, false);
     }
   };

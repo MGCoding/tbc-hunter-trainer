@@ -13,6 +13,10 @@ import { ReferencePanel } from "./ui/ReferencePanel";
 
 const DEFAULT_PRESET_ID = "french-weaving-5511-3w";
 
+export function getSessionElapsedMs(nowMs: number, sessionStartedAtMs: number): number {
+  return nowMs - sessionStartedAtMs;
+}
+
 export function App() {
   const [selectedPresetId, setSelectedPresetId] = useState(DEFAULT_PRESET_ID);
   const [events, setEvents] = useState<SimEvent[]>([]);
@@ -20,6 +24,7 @@ export function App() {
 
   const preset = useMemo(() => getRotationPreset(selectedPresetId), [selectedPresetId]);
   const simulatorRef = useRef<Simulator | null>(null);
+  const sessionStartedAtRef = useRef(0);
   if (simulatorRef.current === null) {
     simulatorRef.current = createSimulator(preset);
   }
@@ -51,6 +56,13 @@ export function App() {
     setEvents(getSimulator().getLog());
   }
 
+  function handleStart(): void {
+    simulatorRef.current = createSimulator(preset);
+    sessionStartedAtRef.current = performance.now();
+    setEvents([]);
+    setRunning(true);
+  }
+
   const handleAbilityPress = useCallback(
     (action: AbilityActionId): void => {
       if (!running) {
@@ -58,7 +70,7 @@ export function App() {
       }
 
       const simulator = getSimulator();
-      simulator.pressAbility(action, performance.now());
+      simulator.pressAbility(action, getSessionElapsedMs(performance.now(), sessionStartedAtRef.current));
       setEvents(simulator.getLog());
     },
     [running],
@@ -80,7 +92,7 @@ export function App() {
           score={score}
           running={running}
           onPresetChange={handlePresetChange}
-          onStart={() => setRunning(true)}
+          onStart={handleStart}
           onStop={handleStop}
         />
         <ReferencePanel preset={preset} />

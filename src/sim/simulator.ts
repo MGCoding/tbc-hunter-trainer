@@ -44,6 +44,10 @@ export class Simulator {
     this.tick(atMs);
     this.log.add({ type: "ability-press", atMs, ability });
 
+    if (ability === "autoShot") {
+      return;
+    }
+
     if (ability === "killCommand" && this.state.activeCast?.ability === "steadyShot") {
       this.log.add({ type: "invalid-input", atMs, ability, reason: "kill-command-during-steady" });
       return;

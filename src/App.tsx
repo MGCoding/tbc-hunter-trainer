@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { getRotationPreset } from "./data/rotations";
 import { scoreEvents } from "./sim/scoring";
 import { expandRotationPattern } from "./sim/timeline";
-import type { SimEvent } from "./sim/types";
+import type { ScoreResult, SimEvent } from "./sim/types";
 import { ControlPanel } from "./ui/ControlPanel";
 import { EventLogPanel } from "./ui/EventLogPanel";
 import { ReferencePanel } from "./ui/ReferencePanel";
@@ -17,7 +17,12 @@ export function App() {
 
   const preset = useMemo(() => getRotationPreset(selectedPresetId), [selectedPresetId]);
   const ideal = useMemo(() => expandRotationPattern(preset), [preset]);
-  const score = useMemo(() => scoreEvents(ideal, events), [events, ideal]);
+  const score = useMemo<ScoreResult>(() => {
+    if (events.length === 0) {
+      return { efficiency: 100, mistakes: [], nextExpected: ideal[0] ?? null };
+    }
+    return scoreEvents(ideal, events);
+  }, [events, ideal]);
 
   function handlePresetChange(id: string): void {
     setRunning(false);

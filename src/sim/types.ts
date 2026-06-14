@@ -25,11 +25,17 @@ export interface RotationPreset {
   derivedMeleeSwingMs: number;
 }
 
-export interface KeyBinding {
-  kind: "keyboard" | "mouse";
-  code?: string;
-  button?: number;
-}
+export type KeyBinding =
+  | {
+      kind: "keyboard";
+      code: string;
+      button?: never;
+    }
+  | {
+      kind: "mouse";
+      button: number;
+      code?: never;
+    };
 
 export type ActionId =
   | "moveForward"

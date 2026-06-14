@@ -103,7 +103,7 @@ export const ROTATION_PRESETS: RotationPreset[] = [
     pattern: "asmawsaswasAaws",
     usage: "Use with no haste effect other than Drums of Battle. Weaves alternate Raptor Strike and melee white hits.",
     rangedWeaponSpeedMs: 3000,
-    targetRangedSwingMs: 3000 / 1.38,
+    targetRangedSwingMs: 3000 / (1.05 * 1.2 * 1.15),
   }),
   preset({
     id: "half-weave-22-1w",

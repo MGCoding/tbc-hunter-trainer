@@ -127,15 +127,15 @@ export function attachBrowserInput(
       return;
     }
 
-    if (hasModifierChord(event) || isEditableKeyboardTarget(event.target)) {
-      return;
-    }
-
     const activeMovementKey = activeMovementByCode.get(event.code);
     if (activeMovementKey !== undefined) {
       event.preventDefault();
       activeMovementByCode.delete(event.code);
       setMovement(activeMovementKey, false);
+      return;
+    }
+
+    if (hasModifierChord(event) || isEditableKeyboardTarget(event.target)) {
       return;
     }
 

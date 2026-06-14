@@ -287,6 +287,35 @@ describe("browser input adapter", () => {
     cleanup();
   });
 
+  it("releases active movement keys even when keyup has a modifier chord", () => {
+    const target = new EventTarget();
+    const onMovementChange = vi.fn();
+    const cleanup = attachBrowserInput(target, DEFAULT_KEYBINDS, {
+      onMovementChange,
+      onAbilityPress: vi.fn(),
+    });
+
+    target.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyW", cancelable: true }));
+    const keyUpEvent = new KeyboardEvent("keyup", { code: "KeyW", cancelable: true, shiftKey: true });
+    target.dispatchEvent(keyUpEvent);
+
+    expect(onMovementChange).toHaveBeenNthCalledWith(1, {
+      forward: true,
+      backward: false,
+      left: false,
+      right: false,
+    });
+    expect(onMovementChange).toHaveBeenNthCalledWith(2, {
+      forward: false,
+      backward: false,
+      left: false,
+      right: false,
+    });
+    expect(keyUpEvent.defaultPrevented).toBe(true);
+
+    cleanup();
+  });
+
   it("ignores held movement repeats after rebinding the same physical key", () => {
     const target = new EventTarget();
     const onMovementChange = vi.fn();

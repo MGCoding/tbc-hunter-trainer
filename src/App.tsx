@@ -21,6 +21,11 @@ export function tickSimulatorToSessionNow(simulator: Simulator, nowMs: number, s
   simulator.tick(getSessionElapsedMs(nowMs, sessionStartedAtMs));
 }
 
+export function clearSimulatorLogAtSessionNow(simulator: Simulator, nowMs: number, sessionStartedAtMs: number): void {
+  tickSimulatorToSessionNow(simulator, nowMs, sessionStartedAtMs);
+  simulator.resetLog();
+}
+
 export function App() {
   const [selectedPresetId, setSelectedPresetId] = useState(DEFAULT_PRESET_ID);
   const [events, setEvents] = useState<SimEvent[]>([]);
@@ -85,7 +90,12 @@ export function App() {
   );
 
   function handleResetLog(): void {
-    getSimulator().resetLog();
+    if (running) {
+      clearSimulatorLogAtSessionNow(getSimulator(), performance.now(), sessionStartedAtRef.current);
+    } else {
+      getSimulator().resetLog();
+    }
+
     setEvents([]);
   }
 

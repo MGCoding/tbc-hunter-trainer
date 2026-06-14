@@ -43,6 +43,21 @@ describe("simulator", () => {
     expect(sim.getLog().some((event) => event.type === "auto-clipped")).toBe(true);
   });
 
+  it("clips Auto Shot when queued Multi-Shot is active at the no-move/no-cast spark", () => {
+    const sim = createSimulator(getRotationPreset("one-one"));
+    const autoDue = sim.getState().nextAutoAtMs;
+    sim.pressAbility("steadyShot", 0);
+    sim.pressAbility("multiShot", 1450);
+    sim.tick(autoDue);
+    expect(sim.getLog()).toContainEqual(expect.objectContaining({
+      type: "cast-start",
+      atMs: 1500,
+      ability: "multiShot",
+    }));
+    expect(sim.getLog().some((event) => event.type === "auto-clipped")).toBe(true);
+    expect(sim.getLog().some((event) => event.type === "auto-fire" && event.atMs === autoDue)).toBe(false);
+  });
+
   it("blocks Kill Command during Steady Shot", () => {
     const sim = createSimulator(getRotationPreset("one-one"));
     sim.pressAbility("steadyShot", 0);

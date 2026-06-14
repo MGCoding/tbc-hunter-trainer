@@ -62,16 +62,23 @@ export class Simulator {
       return;
     }
 
+    this.startQueuedAbility(toMs);
     this.processAutoWindow(toMs);
     this.completeActiveCast(toMs);
     this.state.nowMs = toMs;
+  }
 
-    if (this.state.queuedAbility && this.state.nowMs >= this.state.gcdReadyAtMs) {
+  private startQueuedAbility(toMs: number): void {
+    if (this.state.queuedAbility && toMs >= this.state.gcdReadyAtMs) {
       const queuedAtMs = this.state.gcdReadyAtMs;
+      this.completeActiveCast(queuedAtMs);
+      if (this.state.activeCast) {
+        return;
+      }
+
       const queued = this.state.queuedAbility;
       this.state.queuedAbility = null;
       this.startCast(queued, queuedAtMs);
-      this.completeActiveCast(toMs);
     }
   }
 

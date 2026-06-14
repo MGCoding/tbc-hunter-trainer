@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { TIMING } from "../data/constants";
-import { getRotationPreset } from "../data/rotations";
+import { getRotationPreset, ROTATION_PRESETS } from "../data/rotations";
 import { getAbilityTiming } from "../sim/abilities";
 import { expandRotationPattern, parseRotationTokens } from "../sim/timeline";
-import type { AbilityId } from "../sim/types";
+import type { AbilityId, IdealEvent, RotationPreset } from "../sim/types";
 
 describe("abilities and timelines", () => {
   const abilityIds: AbilityId[] = [
@@ -71,7 +71,54 @@ describe("abilities and timelines", () => {
     ]);
   });
 
+  it("parses every supported compact rotation token", () => {
+    expect(parseRotationTokens("asmAw")).toEqual(["a", "s", "m", "A", "w"]);
+  });
+
+  it("alternates French weaving tokens between Raptor Strike and melee swings", () => {
+    const preset = getRotationPreset("french-weaving-5511-3w");
+    const weaveEvents = expandRotationPattern(preset).filter((event) => event.token === "w");
+
+    expect(weaveEvents.map((event) => event.ability)).toContain("raptorStrike");
+    expect(weaveEvents.map((event) => event.ability)).toContain("meleeSwing");
+    expect(weaveEvents.every((event) => event.label === "Weave")).toBe(true);
+  });
+
+  it("keeps repeated Raptor Strike weave events at least one cooldown apart", () => {
+    const preset = getRotationPreset("french-weaving-5511-3w");
+    const raptorEvents = expandRotationPattern(preset).filter((event) => event.ability === "raptorStrike");
+
+    for (let index = 1; index < raptorEvents.length; index += 1) {
+      expect(raptorEvents[index].idealAtMs - raptorEvents[index - 1].idealAtMs).toBeGreaterThanOrEqual(TIMING.raptorCooldownMs);
+    }
+  });
+
+  it("keeps repeated weave-related abilities outside their cooldowns for every preset", () => {
+    for (const preset of ROTATION_PRESETS) {
+      const seenByAbility = new Map<AbilityId, IdealEvent>();
+
+      for (const event of expandRotationPattern(preset)) {
+        if (event.ability !== "raptorStrike" && event.ability !== "meleeSwing") {
+          continue;
+        }
+
+        const cooldownMs = getAbilityTiming(event.ability, preset).cooldownMs;
+        const previous = seenByAbility.get(event.ability);
+
+        if (previous && cooldownMs > 0) {
+          expect(event.idealAtMs - previous.idealAtMs, describeCooldownFailure(preset, event, previous)).toBeGreaterThanOrEqual(cooldownMs);
+        }
+
+        seenByAbility.set(event.ability, event);
+      }
+    }
+  });
+
   it("throws when parsing unsupported rotation tokens", () => {
     expect(() => parseRotationTokens("asx")).toThrow("Unsupported rotation token: x");
   });
 });
+
+function describeCooldownFailure(preset: RotationPreset, event: IdealEvent, previous: IdealEvent): string {
+  return `${preset.id} repeats ${event.ability} at indexes ${previous.index} and ${event.index}`;
+}

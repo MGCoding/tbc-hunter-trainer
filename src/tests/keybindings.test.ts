@@ -179,6 +179,39 @@ describe("browser input adapter", () => {
     cleanup();
   });
 
+  it("ignores held movement repeats after rebinding the same physical key", () => {
+    const target = new EventTarget();
+    const onMovementChange = vi.fn();
+    let bindings = DEFAULT_KEYBINDS;
+    const cleanup = attachBrowserInput(target, () => bindings, {
+      onMovementChange,
+      onAbilityPress: vi.fn(),
+    });
+
+    target.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyW", cancelable: true }));
+    bindings = rebindAction(bindings, "moveBackward", { kind: "keyboard", code: "KeyW" }, true);
+    const repeatEvent = new KeyboardEvent("keydown", { code: "KeyW", cancelable: true, repeat: true });
+    target.dispatchEvent(repeatEvent);
+    target.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyW", cancelable: true }));
+
+    expect(repeatEvent.defaultPrevented).toBe(true);
+    expect(onMovementChange).toHaveBeenNthCalledWith(1, {
+      forward: true,
+      backward: false,
+      left: false,
+      right: false,
+    });
+    expect(onMovementChange).toHaveBeenNthCalledWith(2, {
+      forward: false,
+      backward: false,
+      left: false,
+      right: false,
+    });
+    expect(onMovementChange).toHaveBeenCalledTimes(2);
+
+    cleanup();
+  });
+
   it("keeps static map usage working", () => {
     const target = new EventTarget();
     const onAbilityPress = vi.fn();

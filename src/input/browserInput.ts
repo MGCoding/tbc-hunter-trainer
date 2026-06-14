@@ -82,6 +82,10 @@ export function attachBrowserInput(
 
     const movementKey = movementKeyForAction(action);
     if (movementKey !== null) {
+      if (activeMovementByCode.has(event.code)) {
+        return;
+      }
+
       activeMovementByCode.set(event.code, movementKey);
       setMovement(movementKey, true);
       return;

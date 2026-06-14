@@ -8,17 +8,37 @@ export interface PracticeSceneData {
   getSimulatorState: () => SimulatorState;
 }
 
-const YARD_PX = 34;
+const MAX_YARD_PX = 34;
 const GRID_YARDS = 5;
 const TARGET_YARDS = MOVEMENT.startingDistanceYards;
-const PLAYER_RADIUS = 14;
-const TARGET_RADIUS = 18;
-const BAR_WIDTH = 260;
-const BAR_HEIGHT = 14;
-const BAR_GAP = 8;
+const MAX_PLAYER_RADIUS = 14;
+const MAX_TARGET_RADIUS = 18;
+const MAX_BAR_WIDTH = 260;
+
+interface HudLayout {
+  top: number;
+  left: number;
+  width: number;
+  castHeight: number;
+  barHeight: number;
+  gap: number;
+  totalHeight: number;
+}
+
+export interface PracticeLayout {
+  yardPx: number;
+  playerRadius: number;
+  targetRadius: number;
+  targetY: number;
+  hud: HudLayout;
+}
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 function remainingProgress(nowMs: number, nextAtMs: number, durationMs: number): number {
@@ -27,6 +47,39 @@ function remainingProgress(nowMs: number, nextAtMs: number, durationMs: number):
   }
 
   return clamp01(1 - Math.max(0, nextAtMs - nowMs) / durationMs);
+}
+
+export function calculatePracticeLayout(width: number, height: number): PracticeLayout {
+  const topMargin = height < 260 ? 12 : 16;
+  const targetRadius = clamp(height * 0.044, 10, MAX_TARGET_RADIUS);
+  const availableTargetSpace = Math.max(48, height / 2 - targetRadius - topMargin);
+  const yardPx = Math.min(MAX_YARD_PX, availableTargetSpace / TARGET_YARDS);
+  const playerRadius = clamp(yardPx * 0.42, 9, MAX_PLAYER_RADIUS);
+  const compactHud = height < 260 || width < 360;
+  const barWidth = Math.min(compactHud ? 220 : MAX_BAR_WIDTH, Math.max(148, width - 40));
+  const castHeight = compactHud ? 12 : 18;
+  const barHeight = compactHud ? 8 : 14;
+  const gap = compactHud ? 4 : 8;
+  const totalHeight = castHeight + gap + barHeight + gap + barHeight;
+  const bottomMargin = 8;
+  const preferredTop = height / 2 + playerRadius + (compactHud ? 20 : 54);
+  const top = clamp(preferredTop, bottomMargin, Math.max(bottomMargin, height - bottomMargin - totalHeight));
+
+  return {
+    yardPx,
+    playerRadius,
+    targetRadius,
+    targetY: -TARGET_YARDS * yardPx,
+    hud: {
+      top,
+      left: width / 2 - barWidth / 2,
+      width: barWidth,
+      castHeight,
+      barHeight,
+      gap,
+      totalHeight,
+    },
+  };
 }
 
 export class PracticeScene extends Phaser.Scene {
@@ -88,69 +141,69 @@ export class PracticeScene extends Phaser.Scene {
     const height = camera.height;
     const halfW = width / 2;
     const halfH = height / 2;
-    const targetY = -TARGET_YARDS * YARD_PX;
+    const layout = calculatePracticeLayout(width, height);
+    const gridStep = GRID_YARDS * layout.yardPx;
 
     this.field.clear();
 
     this.field.lineStyle(1, 0xf4f2ed, 0.08);
-    for (let x = -halfW; x <= halfW; x += GRID_YARDS * YARD_PX) {
+    for (let x = -halfW; x <= halfW; x += gridStep) {
       this.field.lineBetween(x, -halfH, x, halfH);
     }
-    for (let y = -halfH; y <= halfH; y += GRID_YARDS * YARD_PX) {
+    for (let y = -halfH; y <= halfH; y += gridStep) {
       this.field.lineBetween(-halfW, y, halfW, y);
     }
 
     this.field.lineStyle(2, 0xd7a84a, 0.55);
-    this.field.strokeCircle(0, 0, MOVEMENT.meleeRangeYards * YARD_PX);
+    this.field.strokeCircle(0, 0, MOVEMENT.meleeRangeYards * layout.yardPx);
 
     this.field.lineStyle(2, 0x7e9dbc, 0.34);
-    this.field.strokeCircle(0, 0, MOVEMENT.maximumRangedRangeYards * YARD_PX);
+    this.field.strokeCircle(0, 0, MOVEMENT.maximumRangedRangeYards * layout.yardPx);
 
     this.field.lineStyle(2, 0x9ba6ae, 0.28);
-    this.field.strokeCircle(0, 0, MOVEMENT.minimumRangedRangeYards * YARD_PX);
+    this.field.strokeCircle(0, 0, MOVEMENT.minimumRangedRangeYards * layout.yardPx);
 
     this.field.lineStyle(2, 0xf4f2ed, 0.24);
-    this.field.lineBetween(0, 0, 0, targetY);
+    this.field.lineBetween(0, 0, 0, layout.targetY);
 
     this.field.fillStyle(0x27323b, 1);
-    this.field.fillCircle(0, targetY, TARGET_RADIUS);
+    this.field.fillCircle(0, layout.targetY, layout.targetRadius);
     this.field.lineStyle(2, 0xd9664f, 0.9);
-    this.field.strokeCircle(0, targetY, TARGET_RADIUS);
+    this.field.strokeCircle(0, layout.targetY, layout.targetRadius);
     this.field.lineStyle(2, 0xd9664f, 0.45);
-    this.field.lineBetween(-TARGET_RADIUS - 8, targetY, TARGET_RADIUS + 8, targetY);
-    this.field.lineBetween(0, targetY - TARGET_RADIUS - 8, 0, targetY + TARGET_RADIUS + 8);
+    this.field.lineBetween(-layout.targetRadius - 8, layout.targetY, layout.targetRadius + 8, layout.targetY);
+    this.field.lineBetween(0, layout.targetY - layout.targetRadius - 8, 0, layout.targetY + layout.targetRadius + 8);
 
     this.field.fillStyle(0xd7a84a, 1);
-    this.field.fillCircle(0, 0, PLAYER_RADIUS);
+    this.field.fillCircle(0, 0, layout.playerRadius);
     this.field.lineStyle(3, 0xf4f2ed, 0.82);
-    this.field.strokeCircle(0, 0, PLAYER_RADIUS);
+    this.field.strokeCircle(0, 0, layout.playerRadius);
     this.field.fillStyle(0x151719, 0.86);
-    this.field.fillTriangle(0, -PLAYER_RADIUS - 12, -7, -PLAYER_RADIUS + 2, 7, -PLAYER_RADIUS + 2);
+    this.field.fillTriangle(0, -layout.playerRadius - 12, -7, -layout.playerRadius + 2, 7, -layout.playerRadius + 2);
   }
 
   private drawHud(state: SimulatorState): void {
     const camera = this.cameras.main;
-    const left = camera.width / 2 - BAR_WIDTH / 2;
-    const top = camera.height / 2 + 82;
+    const { hud } = calculatePracticeLayout(camera.width, camera.height);
 
     this.hud.clear();
 
     const activeCast = state.activeCast;
     const castDuration = activeCast ? activeCast.completesAtMs - activeCast.startedAtMs : 1;
     const castProgress = activeCast ? clamp01((state.nowMs - activeCast.startedAtMs) / castDuration) : 0;
-    this.drawBar(left, top, BAR_WIDTH, BAR_HEIGHT + 4, castProgress, 0xd7a84a, 0.95);
+    this.drawBar(hud.left, hud.top, hud.width, hud.castHeight, castProgress, 0xd7a84a, 0.95);
 
-    this.castLabel.setPosition(camera.width / 2, top + (BAR_HEIGHT + 4) / 2 - 1);
+    this.castLabel.setPosition(camera.width / 2, hud.top + hud.castHeight / 2 - 1);
     this.castLabel.setText(activeCast ? activeCast.ability : "");
 
-    const meleeTop = top + BAR_HEIGHT + BAR_GAP + 4;
+    const meleeTop = hud.top + hud.castHeight + hud.gap;
     const meleeProgress = remainingProgress(state.nowMs, state.nextMeleeAtMs, this.preset.derivedMeleeSwingMs);
-    this.drawBar(left, meleeTop, BAR_WIDTH, BAR_HEIGHT, meleeProgress, 0xd9664f, 0.88);
+    this.drawBar(hud.left, meleeTop, hud.width, hud.barHeight, meleeProgress, 0xd9664f, 0.88);
 
-    const rangedTop = meleeTop + BAR_HEIGHT + BAR_GAP;
+    const rangedTop = meleeTop + hud.barHeight + hud.gap;
     const rangedProgress = remainingProgress(state.nowMs, state.nextAutoAtMs, this.preset.targetRangedSwingMs);
-    this.drawBar(left, rangedTop, BAR_WIDTH, BAR_HEIGHT, rangedProgress, 0x7e9dbc, 0.92);
-    this.drawRangedSparks(left, rangedTop, state);
+    this.drawBar(hud.left, rangedTop, hud.width, hud.barHeight, rangedProgress, 0x7e9dbc, 0.92);
+    this.drawRangedSparks(hud.left, rangedTop, hud.width, hud.barHeight, state);
   }
 
   private drawBar(x: number, y: number, width: number, height: number, progress: number, color: number, alpha: number): void {
@@ -162,7 +215,7 @@ export class PracticeScene extends Phaser.Scene {
     this.hud.strokeRoundedRect(x, y, width, height, 4);
   }
 
-  private drawRangedSparks(x: number, y: number, state: SimulatorState): void {
+  private drawRangedSparks(x: number, y: number, width: number, height: number, state: SimulatorState): void {
     const nowMs = state.nowMs;
     const cycleStartMs = state.nextAutoAtMs - this.preset.targetRangedSwingMs;
     const sparkTimes = [
@@ -180,11 +233,11 @@ export class PracticeScene extends Phaser.Scene {
       }
 
       const progress = clamp01((spark.atMs - cycleStartMs) / this.preset.targetRangedSwingMs);
-      const sparkX = x + progress * BAR_WIDTH;
+      const sparkX = x + progress * width;
       const isPassed = spark.atMs <= nowMs;
 
       this.hud.lineStyle(2, spark.color, isPassed ? spark.alpha * 0.55 : spark.alpha);
-      this.hud.lineBetween(sparkX, y - 3, sparkX, y + BAR_HEIGHT + 3);
+      this.hud.lineBetween(sparkX, y - 3, sparkX, y + height + 3);
     }
   }
 }

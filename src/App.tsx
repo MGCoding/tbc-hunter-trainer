@@ -5,6 +5,7 @@ import { PhaserHost } from "./game/PhaserHost";
 import { scoreEvents } from "./sim/scoring";
 import { createSimulator } from "./sim/simulator";
 import { expandRotationPattern } from "./sim/timeline";
+import type { Simulator } from "./sim/simulator";
 import type { ScoreResult, SimEvent } from "./sim/types";
 import { ControlPanel } from "./ui/ControlPanel";
 import { EventLogPanel } from "./ui/EventLogPanel";
@@ -18,7 +19,17 @@ export function App() {
   const [running, setRunning] = useState(false);
 
   const preset = useMemo(() => getRotationPreset(selectedPresetId), [selectedPresetId]);
-  const simulatorRef = useRef(createSimulator(preset));
+  const simulatorRef = useRef<Simulator | null>(null);
+  if (simulatorRef.current === null) {
+    simulatorRef.current = createSimulator(preset);
+  }
+  function getSimulator(): Simulator {
+    if (simulatorRef.current === null) {
+      throw new Error("Simulator is not initialized");
+    }
+    return simulatorRef.current;
+  }
+
   const ideal = useMemo(() => expandRotationPattern(preset), [preset]);
   const score = useMemo<ScoreResult>(() => {
     if (events.length === 0) {
@@ -26,7 +37,7 @@ export function App() {
     }
     return scoreEvents(ideal, events);
   }, [events, ideal]);
-  const getSimulatorState = useCallback(() => simulatorRef.current.getState(), []);
+  const getSimulatorState = useCallback(() => getSimulator().getState(), []);
 
   function handlePresetChange(id: string): void {
     simulatorRef.current = createSimulator(getRotationPreset(id));
@@ -37,7 +48,7 @@ export function App() {
 
   function handleStop(): void {
     setRunning(false);
-    setEvents(simulatorRef.current.getLog());
+    setEvents(getSimulator().getLog());
   }
 
   return (

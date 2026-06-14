@@ -55,7 +55,17 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
     return false;
   }
 
-  return target.matches('input, textarea, select, [contenteditable="true"]');
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)
+  ) {
+    return true;
+  }
+
+  const editable = target.closest("[contenteditable]");
+  return editable !== null && editable.getAttribute("contenteditable")?.toLowerCase() !== "false";
 }
 
 export function attachBrowserInput(

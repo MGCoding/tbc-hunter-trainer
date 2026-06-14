@@ -145,6 +145,80 @@ describe("browser input adapter", () => {
     cleanup();
   });
 
+  it("ignores mapped keyboard inputs from descendants inside contenteditable containers", () => {
+    const target = document.createElement("div");
+    const editor = document.createElement("div");
+    const child = document.createElement("span");
+    const onAbilityPress = vi.fn();
+
+    editor.setAttribute("contenteditable", "");
+    editor.appendChild(child);
+    target.appendChild(editor);
+    document.body.appendChild(target);
+
+    const cleanup = attachBrowserInput(target, DEFAULT_KEYBINDS, {
+      onMovementChange: vi.fn(),
+      onAbilityPress,
+    });
+    const typingEvent = new KeyboardEvent("keydown", { code: "Digit1", cancelable: true, bubbles: true });
+
+    child.dispatchEvent(typingEvent);
+
+    expect(onAbilityPress).not.toHaveBeenCalled();
+    expect(typingEvent.defaultPrevented).toBe(false);
+
+    cleanup();
+    target.remove();
+  });
+
+  it("ignores mapped keyboard inputs from plaintext-only contenteditable targets", () => {
+    const target = document.createElement("div");
+    const editor = document.createElement("div");
+    const onAbilityPress = vi.fn();
+
+    editor.setAttribute("contenteditable", "plaintext-only");
+    target.appendChild(editor);
+    document.body.appendChild(target);
+
+    const cleanup = attachBrowserInput(target, DEFAULT_KEYBINDS, {
+      onMovementChange: vi.fn(),
+      onAbilityPress,
+    });
+    const typingEvent = new KeyboardEvent("keydown", { code: "Digit1", cancelable: true, bubbles: true });
+
+    editor.dispatchEvent(typingEvent);
+
+    expect(onAbilityPress).not.toHaveBeenCalled();
+    expect(typingEvent.defaultPrevented).toBe(false);
+
+    cleanup();
+    target.remove();
+  });
+
+  it("handles mapped keyboard inputs from contenteditable false targets", () => {
+    const target = document.createElement("div");
+    const editor = document.createElement("div");
+    const onAbilityPress = vi.fn();
+
+    editor.setAttribute("contenteditable", "false");
+    target.appendChild(editor);
+    document.body.appendChild(target);
+
+    const cleanup = attachBrowserInput(target, DEFAULT_KEYBINDS, {
+      onMovementChange: vi.fn(),
+      onAbilityPress,
+    });
+    const typingEvent = new KeyboardEvent("keydown", { code: "Digit1", cancelable: true, bubbles: true });
+
+    editor.dispatchEvent(typingEvent);
+
+    expect(onAbilityPress).toHaveBeenCalledWith("arcaneShot");
+    expect(typingEvent.defaultPrevented).toBe(true);
+
+    cleanup();
+    target.remove();
+  });
+
   it("removes listeners during cleanup", () => {
     const target = new EventTarget();
     const onMovementChange = vi.fn();

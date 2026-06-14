@@ -20,20 +20,251 @@ input {
   font: inherit;
 }
 
+button,
+select {
+  border: 1px solid rgba(210, 220, 229, 0.22);
+  border-radius: 6px;
+}
+
+button {
+  min-height: 36px;
+  padding: 0 14px;
+  color: #f4f7fa;
+  background: #2f6f72;
+  cursor: pointer;
+}
+
+button:disabled {
+  color: rgba(244, 247, 250, 0.56);
+  background: rgba(244, 247, 250, 0.08);
+  cursor: not-allowed;
+}
+
+select {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  color: #edf4f7;
+  background: #182432;
+}
+
 .app-shell {
   min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
   background: #101820;
 }
 
 .practice-stage {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
+  padding: 24px;
   color: #eaf0f6;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    #101820;
+  background-size: 48px 48px;
 }
 
 .stage-title {
-  border: 1px solid rgba(234, 240, 246, 0.25);
+  width: min(420px, 100%);
+  border: 1px dashed rgba(234, 240, 246, 0.32);
   border-radius: 8px;
-  padding: 24px;
+  padding: 20px;
+  text-align: center;
+}
+
+.stage-title h1 {
+  margin: 0 0 8px;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.stage-title p {
+  margin: 0;
+  color: rgba(234, 240, 246, 0.72);
+}
+
+.side-panels {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  overflow-y: auto;
+  color: #eaf0f6;
+  background: #0d141c;
+  border-left: 1px solid rgba(234, 240, 246, 0.12);
+}
+
+.panel {
+  border: 1px solid rgba(234, 240, 246, 0.14);
+  border-radius: 8px;
+  padding: 14px;
+  background: #121d28;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+.panel a {
+  color: #8ad1d3;
+  font-size: 0.82rem;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field span,
+.metric span,
+.latest-mistake span,
+.panel-details dt {
+  color: rgba(234, 240, 246, 0.64);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.metric,
+.latest-mistake {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(234, 240, 246, 0.1);
+  border-radius: 6px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.metric strong,
+.latest-mistake strong {
+  font-size: 0.95rem;
+}
+
+.button-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.secondary-button {
+  min-height: 32px;
+  padding: 0 10px;
+  color: #eaf0f6;
+  background: transparent;
+}
+
+.status-pill {
+  border: 1px solid rgba(234, 240, 246, 0.14);
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: rgba(234, 240, 246, 0.7);
+  font-size: 0.75rem;
+}
+
+.status-pill.is-running {
+  color: #d7f7d0;
+  border-color: rgba(110, 214, 91, 0.4);
+}
+
+.sequence-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sequence-chip {
+  border: 1px solid rgba(138, 209, 211, 0.28);
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: #d9fbfc;
+  background: rgba(138, 209, 211, 0.1);
+  font-size: 0.78rem;
+}
+
+.panel-details {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+}
+
+.panel-details div {
+  display: grid;
+  gap: 4px;
+}
+
+.panel-details dd {
+  margin: 0;
+  color: rgba(234, 240, 246, 0.86);
+  font-size: 0.9rem;
+}
+
+.event-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.event-list li {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid rgba(234, 240, 246, 0.08);
+  padding: 6px 0;
+  font-size: 0.84rem;
+}
+
+.event-list time {
+  color: rgba(234, 240, 246, 0.62);
+}
+
+.empty-state {
+  margin: 0;
+  color: rgba(234, 240, 246, 0.64);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 860px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .practice-stage,
+  .side-panels {
+    min-height: auto;
+  }
+
+  .practice-stage {
+    min-height: 52vh;
+  }
+
+  .side-panels {
+    border-left: 0;
+    border-top: 1px solid rgba(234, 240, 246, 0.12);
+  }
 }

@@ -29,12 +29,16 @@ export function updateMovement(position: PracticePosition, keys: MovementKeys, d
   const seconds = deltaMs / 1000;
   const forwardAxis = Number(keys.backward) - Number(keys.forward);
   const strafeAxis = Number(keys.right) - Number(keys.left);
+  const velocityX = strafeAxis * MOVEMENT.strafeYardsPerSecond;
+  const velocityY = forwardAxis * MOVEMENT.yardsPerSecond;
+  const speed = Math.hypot(velocityX, velocityY);
+  const scale = speed > MOVEMENT.yardsPerSecond ? MOVEMENT.yardsPerSecond / speed : 1;
 
   return {
     player: {
-      x: position.player.x + strafeAxis * MOVEMENT.strafeYardsPerSecond * seconds,
-      y: position.player.y + forwardAxis * MOVEMENT.yardsPerSecond * seconds,
+      x: position.player.x + velocityX * scale * seconds,
+      y: position.player.y + velocityY * scale * seconds,
     },
-    target: position.target,
+    target: { ...position.target },
   };
 }

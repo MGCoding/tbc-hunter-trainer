@@ -80,6 +80,18 @@ describe("simulator", () => {
     expect(timestamps).toEqual([...timestamps].sort((a, b) => a - b));
   });
 
+  it("ticks pending simulator events before recording invalid input", () => {
+    const sim = createSimulator(getRotationPreset("one-one"));
+
+    sim.pressAbility("steadyShot", 0);
+    const completesAtMs = sim.getState().activeCast?.completesAtMs;
+    sim.recordInvalidInput("arcaneShot", 2000, "out-of-range");
+
+    expect(sim.getLog()).toContainEqual({ type: "cast-complete", atMs: completesAtMs, ability: "steadyShot" });
+    const timestamps = sim.getLog().map((event) => event.atMs);
+    expect(timestamps).toEqual([...timestamps].sort((a, b) => a - b));
+  });
+
   it("returns log snapshots that cannot mutate internal log events", () => {
     const sim = createSimulator(getRotationPreset("one-one"));
     sim.pressAbility("steadyShot", 0);

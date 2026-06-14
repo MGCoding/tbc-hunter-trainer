@@ -41,6 +41,7 @@ export class Simulator {
   }
 
   recordInvalidInput(ability: AbilityId, atMs: number, reason: string): void {
+    this.tick(atMs);
     this.log.add({ type: "ability-press", atMs, ability });
     this.log.add({ type: "invalid-input", atMs, ability, reason });
   }

@@ -117,6 +117,9 @@ export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResul
         mistakes.push({ atMs: event.atMs, label: `${event.ability ?? "Ability"} pressed too early`, penalty: 8 });
       }
     }
+    if (event.type === "invalid-input" && event.reason === "cooldown-locked") {
+      mistakes.push({ atMs: event.atMs, label: `${event.ability ?? "Ability"} on cooldown`, penalty: 8 });
+    }
     if (event.type === "invalid-input" && event.reason === "out-of-range") {
       mistakes.push({ atMs: event.atMs, label: `${event.ability ?? "Ability"} out of range`, penalty: 8 });
     }

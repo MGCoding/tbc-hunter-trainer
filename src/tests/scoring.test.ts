@@ -74,6 +74,15 @@ describe("scoring", () => {
     expect(result.mistakes.map((mistake) => mistake.label)).toContain("Melee action not ready");
   });
 
+  it("penalizes abilities pressed before their cooldown is ready", () => {
+    const result = scoreEvents([], [
+      { type: "invalid-input", atMs: 1500, ability: "arcaneShot", reason: "cooldown-locked" },
+    ]);
+
+    expect(result.efficiency).toBeLessThan(100);
+    expect(result.mistakes.map((mistake) => mistake.label)).toContain("arcaneShot on cooldown");
+  });
+
   it("penalizes unrelated Auto clips immediately before a later ideal Auto fire", () => {
     const ideal = expandRotationPattern(getRotationPreset("one-two"));
     const laterAuto = ideal.find((event, index) => index > 0 && event.ability === "autoShot")!;

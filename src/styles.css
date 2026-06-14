@@ -259,3 +259,10 @@ select {
     border-top: 1px solid rgba(244, 242, 237, 0.12);
   }
 }
+
+@media (max-width: 860px) and (max-height: 480px) {
+  .practice-stage {
+    min-height: 70dvh;
+    height: 70dvh;
+  }
+}

@@ -10,21 +10,29 @@ vi.mock("phaser", () => ({
 
 import { calculatePracticeLayout } from "../game/PracticeScene";
 
+function expectTargetAndHudVisible(width: number, height: number, margin: number): void {
+  const layout = calculatePracticeLayout(width, height);
+
+  expect(layout.targetY - layout.targetRadius).toBeGreaterThanOrEqual(-height / 2 + margin);
+  expect(layout.hud.top).toBeGreaterThanOrEqual(0);
+  expect(layout.hud.top + layout.hud.totalHeight).toBeLessThanOrEqual(height - margin);
+}
+
 describe("PracticeScene layout", () => {
   it("keeps the target and HUD stack visible on mobile portrait surfaces", () => {
-    const layout = calculatePracticeLayout(390, 439);
-
-    expect(layout.targetY).toBeGreaterThanOrEqual(-439 / 2 + layout.targetRadius + 16);
-    expect(layout.hud.top).toBeGreaterThanOrEqual(0);
-    expect(layout.hud.top + layout.hud.totalHeight).toBeLessThanOrEqual(439 - 8);
+    expectTargetAndHudVisible(390, 439, 8);
   });
 
-  it("keeps compact HUD bars inside short landscape surfaces", () => {
-    const layout = calculatePracticeLayout(844, 203);
+  it("keeps compact HUD bars inside short landscape surfaces at CSS-derived height", () => {
+    const height = Math.round(390 * 0.7);
+    const layout = calculatePracticeLayout(844, height);
 
     expect(layout.hud.width).toBeLessThan(260);
-    expect(layout.hud.top).toBeGreaterThanOrEqual(0);
-    expect(layout.hud.top + layout.hud.totalHeight).toBeLessThanOrEqual(203 - 8);
+    expectTargetAndHudVisible(844, height, 8);
+  });
+
+  it("keeps the target circle visible on tiny canvases", () => {
+    expectTargetAndHudVisible(844, Math.round(203 * 0.52), 4);
   });
 
   it("caps yard scale on desktop-sized practice fields", () => {

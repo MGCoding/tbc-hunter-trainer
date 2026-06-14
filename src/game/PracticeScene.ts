@@ -52,10 +52,10 @@ function remainingProgress(nowMs: number, nextAtMs: number, durationMs: number):
 export function calculatePracticeLayout(width: number, height: number): PracticeLayout {
   const topMargin = height < 260 ? 12 : 16;
   const targetRadius = clamp(height * 0.044, 10, MAX_TARGET_RADIUS);
-  const availableTargetSpace = Math.max(48, height / 2 - targetRadius - topMargin);
+  const availableTargetSpace = Math.max(0, height / 2 - targetRadius - topMargin);
   const yardPx = Math.min(MAX_YARD_PX, availableTargetSpace / TARGET_YARDS);
   const playerRadius = clamp(yardPx * 0.42, 9, MAX_PLAYER_RADIUS);
-  const compactHud = height < 260 || width < 360;
+  const compactHud = height < 320 || width < 360;
   const barWidth = Math.min(compactHud ? 220 : MAX_BAR_WIDTH, Math.max(148, width - 40));
   const castHeight = compactHud ? 12 : 18;
   const barHeight = compactHud ? 8 : 14;

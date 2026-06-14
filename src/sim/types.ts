@@ -73,3 +73,21 @@ export interface RangeState {
   canMelee: boolean;
   canUseRanged: boolean;
 }
+
+export interface AbilityTiming {
+  ability: AbilityId;
+  castMs: number;
+  cooldownMs: number;
+  usesGcd: boolean;
+  requiresMelee: boolean;
+  requiresRanged: boolean;
+  offGcd: boolean;
+}
+
+export interface IdealEvent {
+  index: number;
+  token: RotationToken;
+  ability: AbilityId;
+  idealAtMs: number;
+  label: string;
+}

@@ -6,7 +6,7 @@ import { scoreEvents } from "./sim/scoring";
 import { createSimulator } from "./sim/simulator";
 import { expandRotationPattern } from "./sim/timeline";
 import type { Simulator } from "./sim/simulator";
-import type { ScoreResult, SimEvent } from "./sim/types";
+import type { AbilityActionId, ScoreResult, SimEvent } from "./sim/types";
 import { ControlPanel } from "./ui/ControlPanel";
 import { EventLogPanel } from "./ui/EventLogPanel";
 import { ReferencePanel } from "./ui/ReferencePanel";
@@ -51,10 +51,28 @@ export function App() {
     setEvents(getSimulator().getLog());
   }
 
+  const handleAbilityPress = useCallback(
+    (action: AbilityActionId): void => {
+      if (!running) {
+        return;
+      }
+
+      const simulator = getSimulator();
+      simulator.pressAbility(action, performance.now());
+      setEvents(simulator.getLog());
+    },
+    [running],
+  );
+
+  function handleResetLog(): void {
+    getSimulator().resetLog();
+    setEvents([]);
+  }
+
   return (
     <main className="app-shell">
       <section className="practice-stage" aria-label="Practice field">
-        <PhaserHost preset={preset} getSimulatorState={getSimulatorState} />
+        <PhaserHost preset={preset} getSimulatorState={getSimulatorState} onAbilityPress={handleAbilityPress} />
       </section>
       <aside className="side-panels" aria-label="Trainer controls">
         <ControlPanel
@@ -66,7 +84,7 @@ export function App() {
           onStop={handleStop}
         />
         <ReferencePanel preset={preset} />
-        <EventLogPanel events={events} onReset={() => setEvents([])} />
+        <EventLogPanel events={events} onReset={handleResetLog} />
       </aside>
     </main>
   );

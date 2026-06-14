@@ -36,6 +36,10 @@ export class Simulator {
     return this.log.all();
   }
 
+  resetLog(): void {
+    this.log.reset();
+  }
+
   pressAbility(ability: AbilityId, atMs: number): void {
     this.tick(atMs);
     this.log.add({ type: "ability-press", atMs, ability });

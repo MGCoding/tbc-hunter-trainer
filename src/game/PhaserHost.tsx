@@ -1,16 +1,33 @@
 import { useEffect, useRef } from "react";
 import type { Game as PhaserGame, Types as PhaserTypes } from "phaser";
 
+import { DEFAULT_KEYBINDS } from "../data/constants";
+import { attachBrowserInput } from "../input/browserInput";
+import type { AbilityActionId } from "../sim/types";
 import type { RotationPreset, SimulatorState } from "../sim/types";
 
 interface PhaserHostProps {
   preset: RotationPreset;
   getSimulatorState: () => SimulatorState;
+  onAbilityPress: (action: AbilityActionId) => void;
 }
 
-export function PhaserHost({ preset, getSimulatorState }: PhaserHostProps) {
+export function PhaserHost({ preset, getSimulatorState, onAbilityPress }: PhaserHostProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<PhaserGame | null>(null);
+
+  useEffect(() => {
+    const parent = parentRef.current;
+    if (!parent) {
+      return undefined;
+    }
+
+    parent.focus();
+    return attachBrowserInput(parent, DEFAULT_KEYBINDS, {
+      onMovementChange: () => undefined,
+      onAbilityPress,
+    });
+  }, [onAbilityPress]);
 
   useEffect(() => {
     const parent = parentRef.current;
@@ -55,5 +72,5 @@ export function PhaserHost({ preset, getSimulatorState }: PhaserHostProps) {
     };
   }, [preset, getSimulatorState]);
 
-  return <div ref={parentRef} className="phaser-host" data-testid="phaser-host" />;
+  return <div ref={parentRef} className="phaser-host" data-testid="phaser-host" tabIndex={0} />;
 }

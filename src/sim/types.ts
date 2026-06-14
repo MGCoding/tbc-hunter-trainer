@@ -90,6 +90,7 @@ export interface IdealEvent {
   ability: AbilityId;
   idealAtMs: number;
   label: string;
+  expectedClipAtMs?: number[];
 }
 
 export type SimEventType =

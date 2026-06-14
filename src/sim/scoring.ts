@@ -1,10 +1,8 @@
-import { TIMING } from "../data/constants";
 import type { AbilityId, IdealEvent, ScoreMistake, ScoreResult, SimEvent } from "./types";
 
 const TIMING_TOLERANCE_MS = 100;
 
 type ScoreableEvent = SimEvent & { ability: AbilityId };
-type InvalidInputEvent = SimEvent & { type: "invalid-input"; ability: AbilityId };
 
 function isScoreableEvent(event: SimEvent): event is ScoreableEvent {
   if (!event.ability) {
@@ -37,26 +35,14 @@ function addTimingMistake(mistakes: ScoreMistake[], expected: IdealEvent, actual
   }
 }
 
-function findGcdLockedEvent(expected: IdealEvent, events: SimEvent[]): InvalidInputEvent | undefined {
-  return events.find((event): event is InvalidInputEvent => {
-    return event.type === "invalid-input" && event.reason === "gcd-locked" && event.ability === expected.ability && event.atMs < expected.idealAtMs;
-  });
-}
-
-function isExpectedClipReplacement(event: SimEvent, events: SimEvent[], idealAutoFireTimes: Set<number>): boolean {
-  const nextAutoFire = events
-    .filter((candidate) => candidate.type === "auto-fire" && candidate.ability === "autoShot" && candidate.atMs > event.atMs)
-    .sort((first, second) => first.atMs - second.atMs)[0];
-
-  return nextAutoFire !== undefined && nextAutoFire.atMs - event.atMs <= TIMING.noMoveNoCastLeadMs && idealAutoFireTimes.has(nextAutoFire.atMs);
+function findFutureExpectedAbility(event: SimEvent, ideal: IdealEvent[]): IdealEvent | undefined {
+  return ideal.find((expected) => expected.ability === event.ability && expected.idealAtMs > event.atMs);
 }
 
 export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResult {
   const mistakes: ScoreMistake[] = [];
   const scoreableEvents = events.filter(isScoreableEvent).sort(compareScoreableEvents);
-  const idealAutoFireTimes = new Set(
-    ideal.filter((event) => event.ability === "autoShot").map((event) => event.idealAtMs),
-  );
+  const expectedClipTimes = new Set(ideal.flatMap((event) => event.expectedClipAtMs ?? []));
 
   let idealIndex = 0;
   let actualIndex = 0;
@@ -76,11 +62,6 @@ export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResul
   }
 
   for (const expected of ideal.slice(idealIndex)) {
-    const gcdLocked = findGcdLockedEvent(expected, events);
-    if (gcdLocked) {
-      addTimingMistake(mistakes, expected, gcdLocked);
-      continue;
-    }
     mistakes.push({ atMs: expected.idealAtMs, label: `${expected.label} missed`, penalty: 8 });
   }
 
@@ -90,7 +71,7 @@ export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResul
 
   for (const event of events) {
     if (event.type === "auto-clipped") {
-      if (isExpectedClipReplacement(event, events, idealAutoFireTimes)) {
+      if (expectedClipTimes.has(event.atMs)) {
         continue;
       }
       mistakes.push({ atMs: event.atMs, label: "Auto clipped", penalty: 15 });
@@ -100,6 +81,14 @@ export function scoreEvents(ideal: IdealEvent[], events: SimEvent[]): ScoreResul
     }
     if (event.type === "invalid-input" && event.reason === "melee-action-not-ready") {
       mistakes.push({ atMs: event.atMs, label: "Melee action not ready", penalty: 6 });
+    }
+    if (event.type === "invalid-input" && event.reason === "gcd-locked") {
+      const expected = findFutureExpectedAbility(event, ideal);
+      if (expected) {
+        addTimingMistake(mistakes, expected, event as ScoreableEvent);
+      } else {
+        mistakes.push({ atMs: event.atMs, label: `${event.ability ?? "Ability"} pressed too early`, penalty: 8 });
+      }
     }
     if (event.type === "invalid-input" && event.reason === "out-of-range") {
       mistakes.push({ atMs: event.atMs, label: `${event.ability ?? "Ability"} out of range`, penalty: 8 });

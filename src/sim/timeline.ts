@@ -31,13 +31,14 @@ export function expandRotationPattern(preset: RotationPreset): IdealEvent[] {
 
   return parseRotationTokens(preset.pattern).map((token, index) => {
     if (token === "a") {
-      const event = tickUntilNextAutoFire(sim);
+      const { event, expectedClipAtMs } = tickUntilNextAutoFire(sim);
       return {
         index,
         token,
         ability: "autoShot",
         label: TOKEN_TO_LABEL[token],
         idealAtMs: event.atMs,
+        ...(expectedClipAtMs.length > 0 ? { expectedClipAtMs } : {}),
       };
     }
 
@@ -53,8 +54,12 @@ export function expandRotationPattern(preset: RotationPreset): IdealEvent[] {
   });
 }
 
-function tickUntilNextAutoFire(sim: ReturnType<typeof createSimulator>): SimEvent & { ability: "autoShot" } {
+function tickUntilNextAutoFire(sim: ReturnType<typeof createSimulator>): {
+  event: SimEvent & { ability: "autoShot" };
+  expectedClipAtMs: number[];
+} {
   const previousAutoCount = sim.getLog().filter((event) => event.type === "auto-fire").length;
+  const startLogLength = sim.getLog().length;
 
   while (true) {
     sim.tick(sim.getState().nextAutoAtMs);
@@ -62,7 +67,12 @@ function tickUntilNextAutoFire(sim: ReturnType<typeof createSimulator>): SimEven
       return event.type === "auto-fire" && event.ability === "autoShot";
     });
     if (autoFires.length > previousAutoCount) {
-      return autoFires[autoFires.length - 1];
+      const event = autoFires[autoFires.length - 1];
+      const expectedClipAtMs = sim.getLog().slice(startLogLength).flatMap((entry) => {
+        return entry.type === "auto-clipped" && entry.ability === "autoShot" && entry.atMs < event.atMs ? [entry.atMs] : [];
+      });
+
+      return { event, expectedClipAtMs };
     }
   }
 }

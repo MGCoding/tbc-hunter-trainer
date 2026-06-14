@@ -74,11 +74,12 @@ describe("scoring", () => {
     expect(result.mistakes.map((mistake) => mistake.label)).toContain("Melee action not ready");
   });
 
-  it("penalizes unrelated Auto clips before a later ideal Auto fire", () => {
+  it("penalizes unrelated Auto clips immediately before a later ideal Auto fire", () => {
     const ideal = expandRotationPattern(getRotationPreset("one-two"));
+    const laterAuto = ideal.find((event, index) => index > 0 && event.ability === "autoShot")!;
     const events: SimEvent[] = [
       ...toPerfectEvents(ideal),
-      { type: "auto-clipped", atMs: ideal[1].idealAtMs + 25, ability: "autoShot", reason: "casting-at-spark" },
+      { type: "auto-clipped", atMs: laterAuto.idealAtMs - 25, ability: "autoShot", reason: "casting-at-spark" },
     ];
 
     const result = scoreEvents(ideal, events);
@@ -92,6 +93,19 @@ describe("scoring", () => {
     const result = scoreEvents(ideal.slice(1, 2), [
       { type: "invalid-input", atMs: ideal[1].idealAtMs - 250, ability: ideal[1].ability, reason: "gcd-locked" },
     ]);
+
+    expect(result.efficiency).toBeLessThan(100);
+    expect(result.mistakes.map((mistake) => mistake.label)).toContain("Steady 250ms early");
+  });
+
+  it("scores GCD-locked early presses even when the ideal cast follows", () => {
+    const ideal = expandRotationPattern(getRotationPreset("one-one"));
+    const events: SimEvent[] = [
+      { type: "invalid-input", atMs: ideal[1].idealAtMs - 250, ability: ideal[1].ability, reason: "gcd-locked" },
+      { type: "cast-start", atMs: ideal[1].idealAtMs, ability: ideal[1].ability },
+    ];
+
+    const result = scoreEvents(ideal.slice(1, 2), events);
 
     expect(result.efficiency).toBeLessThan(100);
     expect(result.mistakes.map((mistake) => mistake.label)).toContain("Steady 250ms early");
@@ -202,6 +216,7 @@ describe("scoring", () => {
 
     expect(clippedAuto).toBeDefined();
     expect(delayedAuto).toBeDefined();
+    expect(ideal.some((event) => event.ability === "autoShot" && event.expectedClipAtMs?.includes(clippedAuto!.atMs))).toBe(true);
     expect(ideal.some((event) => event.ability === "autoShot" && event.idealAtMs === delayedAuto!.atMs)).toBe(true);
     expect(scoreEvents(ideal, log).mistakes).toEqual([]);
   });

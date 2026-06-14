@@ -1,7 +1,6 @@
 import type { AbilityId, IdealEvent, ScoreMistake, ScoreResult, SimEvent } from "./types";
 
 const TIMING_TOLERANCE_MS = 100;
-const IDEAL_LOOKAHEAD_COUNT = 3;
 
 type ScoreableEvent = SimEvent & { ability: AbilityId };
 
@@ -45,8 +44,7 @@ function findFutureExpectedAbility(event: SimEvent, ideal: IdealEvent[]): IdealE
 }
 
 function findLookaheadMatch(ideal: IdealEvent[], startIndex: number, actual: ScoreableEvent): number {
-  const endIndex = Math.min(ideal.length, startIndex + IDEAL_LOOKAHEAD_COUNT + 1);
-  for (let index = startIndex + 1; index < endIndex; index += 1) {
+  for (let index = startIndex + 1; index < ideal.length; index += 1) {
     const expected = ideal[index];
     if (expected.ability === actual.ability && Math.abs(actual.atMs - expected.idealAtMs) <= TIMING_TOLERANCE_MS) {
       return index;

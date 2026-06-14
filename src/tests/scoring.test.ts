@@ -168,6 +168,27 @@ describe("scoring", () => {
     expect(result.nextExpected).toBeNull();
   });
 
+  it("recovers repeated abilities across the full remaining ideal timeline", () => {
+    const ideal = expandRotationPattern(getRotationPreset("long-french-5611"));
+    const firstSteadyIndex = ideal.findIndex((event) => event.ability === "steadyShot");
+    const laterSteadyIndex = ideal.findIndex((event, index) => index > firstSteadyIndex && event.ability === "steadyShot");
+    const laterSteady = ideal[laterSteadyIndex];
+    const events: SimEvent[] = [
+      { type: "cast-start", atMs: laterSteady.idealAtMs, ability: "steadyShot" },
+    ];
+
+    const result = scoreEvents(ideal, events);
+    const labels = result.mistakes.map((mistake) => mistake.label);
+
+    expect(laterSteadyIndex - firstSteadyIndex).toBeGreaterThan(3);
+    for (const skipped of ideal.slice(0, laterSteadyIndex)) {
+      expect(labels).toContain(`${skipped.label} missed`);
+    }
+    expect(labels).not.toContain(`Steady ${Math.round(laterSteady.idealAtMs - ideal[firstSteadyIndex].idealAtMs)}ms late`);
+    expect(labels).not.toContain("Unexpected steadyShot");
+    expect(result.nextExpected).toBe(ideal[laterSteadyIndex + 1]);
+  });
+
   it("does not advance nextExpected for wrong scoring events", () => {
     const ideal = expandRotationPattern(getRotationPreset("one-one"));
     const result = scoreEvents(ideal, [{ type: "cast-start", atMs: ideal[0].idealAtMs, ability: "arcaneShot" }]);

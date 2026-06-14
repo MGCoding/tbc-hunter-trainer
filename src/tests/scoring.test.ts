@@ -98,4 +98,23 @@ describe("scoring", () => {
     expect(abilities).toContain("meleeSwing");
     expect(scoreEvents(ideal, toPerfectEvents(ideal)).efficiency).toBe(100);
   });
+
+  it("scores simulator melee-action logs against ideal weave events", () => {
+    const preset = getRotationPreset("french-weaving-5511-3w");
+    const ideal = expandRotationPattern(preset);
+    const idealRaptor = ideal.find((event) => event.ability === "raptorStrike")!;
+    const idealMelee = ideal.find((event) => event.ability === "meleeSwing")!;
+    const sim = createSimulator(preset);
+
+    sim.pressAbility("raptorStrike", idealRaptor.idealAtMs);
+    sim.pressAbility("raptorStrike", idealMelee.idealAtMs);
+
+    const result = scoreEvents(
+      [idealRaptor, idealMelee],
+      sim.getLog().filter((event) => event.type === "cast-start"),
+    );
+
+    expect(result.mistakes).toEqual([]);
+    expect(result.efficiency).toBe(100);
+  });
 });

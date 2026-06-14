@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getRotationPreset } from "../data/rotations";
 import { createSimulator } from "../sim/simulator";
+import { expandRotationPattern } from "../sim/timeline";
 
 describe("simulator", () => {
   it("queues a GCD ability inside the 100ms spell queue window", () => {
@@ -100,6 +101,28 @@ describe("simulator", () => {
       type: "invalid-input",
       ability: "killCommand",
       reason: "kill-command-during-steady",
+    }));
+  });
+
+  it("resolves melee action presses to Raptor Strike and white melee swings", () => {
+    const preset = getRotationPreset("french-weaving-5511-3w");
+    const ideal = expandRotationPattern(preset);
+    const idealRaptor = ideal.find((event) => event.ability === "raptorStrike")!;
+    const idealMelee = ideal.find((event) => event.ability === "meleeSwing")!;
+    const sim = createSimulator(preset);
+
+    sim.pressAbility("raptorStrike", idealRaptor.idealAtMs);
+    sim.pressAbility("raptorStrike", idealMelee.idealAtMs);
+
+    expect(sim.getLog()).toContainEqual(expect.objectContaining({
+      type: "cast-start",
+      atMs: idealRaptor.idealAtMs,
+      ability: "raptorStrike",
+    }));
+    expect(sim.getLog()).toContainEqual(expect.objectContaining({
+      type: "cast-start",
+      atMs: idealMelee.idealAtMs,
+      ability: "meleeSwing",
     }));
   });
 });

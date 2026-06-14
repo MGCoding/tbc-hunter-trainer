@@ -123,6 +123,7 @@ export interface SimulatorState {
   gcdReadyAtMs: number;
   nextAutoAtMs: number;
   nextMeleeAtMs: number;
+  raptorReadyAtMs: number;
   activeCast: ActiveCast | null;
   queuedAbility: AbilityId | null;
 }

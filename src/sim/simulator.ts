@@ -19,6 +19,7 @@ export class Simulator {
       gcdReadyAtMs: 0,
       nextAutoAtMs: preset.targetRangedSwingMs,
       nextMeleeAtMs: preset.derivedMeleeSwingMs,
+      raptorReadyAtMs: 0,
       activeCast: null,
       queuedAbility: null,
     };
@@ -41,6 +42,11 @@ export class Simulator {
 
     if (ability === "killCommand" && this.state.activeCast?.ability === "steadyShot") {
       this.log.add({ type: "invalid-input", atMs, ability, reason: "kill-command-during-steady" });
+      return;
+    }
+
+    if (ability === "raptorStrike") {
+      this.resolveMeleeAction(atMs);
       return;
     }
 
@@ -80,6 +86,23 @@ export class Simulator {
       this.state.queuedAbility = null;
       this.startCast(queued, queuedAtMs);
     }
+  }
+
+  private resolveMeleeAction(atMs: number): void {
+    if (atMs >= this.state.raptorReadyAtMs) {
+      const timing = getAbilityTiming("raptorStrike", this.preset);
+      this.startCast("raptorStrike", atMs);
+      this.state.raptorReadyAtMs = atMs + timing.cooldownMs;
+      return;
+    }
+
+    if (atMs >= this.state.nextMeleeAtMs) {
+      this.startCast("meleeSwing", atMs);
+      this.state.nextMeleeAtMs = atMs + this.preset.derivedMeleeSwingMs;
+      return;
+    }
+
+    this.log.add({ type: "invalid-input", atMs, ability: "raptorStrike", reason: "melee-action-not-ready" });
   }
 
   private startCast(ability: AbilityId, atMs: number): void {

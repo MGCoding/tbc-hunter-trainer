@@ -55,6 +55,23 @@ describe("simulator", () => {
     expect(sim.getLog().some((event) => event.type === "auto-clipped")).toBe(true);
   });
 
+  it("clips Auto Shot when Steady Shot is still casting at no-move/no-cast spark", () => {
+    const sim = createSimulator(getRotationPreset("one-one"));
+    const autoDue = sim.getState().nextAutoAtMs;
+    const spark = autoDue - 500;
+
+    sim.pressAbility("steadyShot", spark - 100);
+    sim.tick(autoDue);
+
+    expect(sim.getLog()).toContainEqual({
+      type: "auto-clipped",
+      atMs: autoDue,
+      ability: "autoShot",
+      reason: "casting-at-spark",
+    });
+    expect(sim.getLog()).not.toContainEqual({ type: "auto-fire", atMs: autoDue, ability: "autoShot" });
+  });
+
   it("clips Auto Shot when queued Multi-Shot is active at the no-move/no-cast spark", () => {
     const sim = createSimulator(getRotationPreset("one-one"));
     const autoDue = sim.getState().nextAutoAtMs;
@@ -78,6 +95,44 @@ describe("simulator", () => {
     sim.tick(autoDue);
     const timestamps = sim.getLog().map((event) => event.atMs);
     expect(timestamps).toEqual([...timestamps].sort((a, b) => a - b));
+  });
+
+  it("enforces Arcane Shot and Multi-Shot cooldowns", () => {
+    const sim = createSimulator(getRotationPreset("one-one"));
+
+    sim.pressAbility("arcaneShot", 0);
+    sim.pressAbility("arcaneShot", 1500);
+    sim.pressAbility("multiShot", 3000);
+    sim.pressAbility("multiShot", 4500);
+
+    expect(sim.getLog()).toContainEqual({
+      type: "invalid-input",
+      atMs: 1500,
+      ability: "arcaneShot",
+      reason: "cooldown-locked",
+    });
+    expect(sim.getLog()).toContainEqual({
+      type: "invalid-input",
+      atMs: 4500,
+      ability: "multiShot",
+      reason: "cooldown-locked",
+    });
+  });
+
+  it("enforces Kill Command cooldown while leaving it off the GCD", () => {
+    const sim = createSimulator(getRotationPreset("one-one"));
+
+    sim.pressAbility("killCommand", 0);
+    sim.pressAbility("killCommand", 100);
+    sim.pressAbility("arcaneShot", 200);
+
+    expect(sim.getLog()).toContainEqual({
+      type: "invalid-input",
+      atMs: 100,
+      ability: "killCommand",
+      reason: "cooldown-locked",
+    });
+    expect(sim.getLog()).toContainEqual({ type: "cast-start", atMs: 200, ability: "arcaneShot" });
   });
 
   it("ticks pending simulator events before recording invalid input", () => {

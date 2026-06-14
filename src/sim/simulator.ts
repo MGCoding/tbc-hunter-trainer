@@ -12,6 +12,7 @@ export function createSimulator(preset: RotationPreset): Simulator {
 export class Simulator {
   private readonly log = new SessionLog();
   private state: SimulatorState;
+  private readonly cooldownReadyAtMs: Partial<Record<AbilityId, number>> = {};
 
   constructor(private readonly preset: RotationPreset) {
     this.state = {
@@ -40,6 +41,10 @@ export class Simulator {
     this.log.reset();
   }
 
+  getAbilityReadyAtMs(ability: AbilityId): number {
+    return this.cooldownReadyAtMs[ability] ?? 0;
+  }
+
   recordInvalidInput(ability: AbilityId, atMs: number, reason: string): void {
     this.tick(atMs);
     this.log.add({ type: "ability-press", atMs, ability });
@@ -61,6 +66,11 @@ export class Simulator {
 
     if (ability === "raptorStrike") {
       this.resolveMeleeAction(atMs);
+      return;
+    }
+
+    if (atMs < this.getAbilityReadyAtMs(ability)) {
+      this.log.add({ type: "invalid-input", atMs, ability, reason: "cooldown-locked" });
       return;
     }
 
@@ -124,6 +134,10 @@ export class Simulator {
     const completesAtMs = atMs + timing.castMs;
     this.log.add({ type: "cast-start", atMs, ability });
 
+    if (timing.cooldownMs > 0 && ability !== "raptorStrike" && ability !== "meleeSwing") {
+      this.cooldownReadyAtMs[ability] = atMs + timing.cooldownMs;
+    }
+
     if (timing.usesGcd) {
       this.state.gcdReadyAtMs = atMs + TIMING.gcdMs;
     }
@@ -151,8 +165,10 @@ export class Simulator {
       const currentAutoAtMs = this.state.nextAutoAtMs;
       const sparkAt = currentAutoAtMs - TIMING.noMoveNoCastLeadMs;
       const active = this.state.activeCast;
+      const activeCastBlocksAuto =
+        active !== null && active.startedAtMs <= sparkAt && active.completesAtMs > sparkAt;
 
-      if (active && active.ability === "multiShot" && active.completesAtMs > sparkAt) {
+      if (activeCastBlocksAuto) {
         this.log.add({
           type: "auto-clipped",
           atMs: currentAutoAtMs,

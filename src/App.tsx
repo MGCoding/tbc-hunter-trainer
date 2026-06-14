@@ -17,6 +17,10 @@ export function getSessionElapsedMs(nowMs: number, sessionStartedAtMs: number): 
   return nowMs - sessionStartedAtMs;
 }
 
+export function tickSimulatorToSessionNow(simulator: Simulator, nowMs: number, sessionStartedAtMs: number): void {
+  simulator.tick(getSessionElapsedMs(nowMs, sessionStartedAtMs));
+}
+
 export function App() {
   const [selectedPresetId, setSelectedPresetId] = useState(DEFAULT_PRESET_ID);
   const [events, setEvents] = useState<SimEvent[]>([]);
@@ -52,6 +56,10 @@ export function App() {
   }
 
   function handleStop(): void {
+    if (running) {
+      tickSimulatorToSessionNow(getSimulator(), performance.now(), sessionStartedAtRef.current);
+    }
+
     setRunning(false);
     setEvents(getSimulator().getLog());
   }

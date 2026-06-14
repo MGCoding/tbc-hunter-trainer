@@ -7,7 +7,7 @@ export function getAbilityTiming(ability: AbilityId, preset: RotationPreset): Ab
 
   const table: Record<AbilityId, AbilityTiming> = {
     autoShot: {
-      ability,
+      ability: "autoShot",
       castMs: TIMING.autoWindupMs / preset.hasteFactor,
       cooldownMs: preset.targetRangedSwingMs,
       usesGcd: false,
@@ -16,7 +16,7 @@ export function getAbilityTiming(ability: AbilityId, preset: RotationPreset): Ab
       offGcd: true,
     },
     steadyShot: {
-      ability,
+      ability: "steadyShot",
       castMs: hastedSteady,
       cooldownMs: 0,
       usesGcd: true,
@@ -25,7 +25,7 @@ export function getAbilityTiming(ability: AbilityId, preset: RotationPreset): Ab
       offGcd: false,
     },
     multiShot: {
-      ability,
+      ability: "multiShot",
       castMs: hastedMulti,
       cooldownMs: TIMING.multiCooldownMs,
       usesGcd: true,
@@ -34,7 +34,7 @@ export function getAbilityTiming(ability: AbilityId, preset: RotationPreset): Ab
       offGcd: false,
     },
     arcaneShot: {
-      ability,
+      ability: "arcaneShot",
       castMs: 0,
       cooldownMs: TIMING.arcaneCooldownMs,
       usesGcd: true,
@@ -43,7 +43,7 @@ export function getAbilityTiming(ability: AbilityId, preset: RotationPreset): Ab
       offGcd: false,
     },
     killCommand: {
-      ability,
+      ability: "killCommand",
       castMs: 0,
       cooldownMs: TIMING.killCommandCooldownMs,
       usesGcd: false,
@@ -52,7 +52,7 @@ export function getAbilityTiming(ability: AbilityId, preset: RotationPreset): Ab
       offGcd: true,
     },
     raptorStrike: {
-      ability,
+      ability: "raptorStrike",
       castMs: 0,
       cooldownMs: TIMING.raptorCooldownMs,
       usesGcd: false,
@@ -61,7 +61,7 @@ export function getAbilityTiming(ability: AbilityId, preset: RotationPreset): Ab
       offGcd: true,
     },
     meleeSwing: {
-      ability,
+      ability: "meleeSwing",
       castMs: 0,
       cooldownMs: preset.derivedMeleeSwingMs,
       usesGcd: false,

@@ -1,3 +1,5 @@
+import { TIMING } from "../data/constants";
+import { getAbilityTiming } from "./abilities";
 import type { AbilityId, IdealEvent, RotationPreset, RotationToken } from "./types";
 
 const TOKEN_TO_ABILITY: Record<RotationToken, AbilityId> = {
@@ -5,7 +7,7 @@ const TOKEN_TO_ABILITY: Record<RotationToken, AbilityId> = {
   s: "steadyShot",
   m: "multiShot",
   A: "arcaneShot",
-  w: "meleeSwing",
+  w: "raptorStrike",
 };
 
 const TOKEN_TO_LABEL: Record<RotationToken, string> = {
@@ -27,15 +29,29 @@ export function parseRotationTokens(pattern: string): RotationToken[] {
 
 export function expandRotationPattern(preset: RotationPreset): IdealEvent[] {
   let currentMs = 0;
+  let gcdReadyAt = 0;
+  let nextAutoAt = 0;
+
   return parseRotationTokens(preset.pattern).map((token, index) => {
+    const ability = TOKEN_TO_ABILITY[token];
+    const timing = getAbilityTiming(ability, preset);
+    const start = token === "a" ? Math.max(currentMs, nextAutoAt) : Math.max(currentMs, timing.usesGcd ? gcdReadyAt : currentMs);
     const event: IdealEvent = {
       index,
       token,
-      ability: TOKEN_TO_ABILITY[token],
+      ability,
       label: TOKEN_TO_LABEL[token],
-      idealAtMs: currentMs,
+      idealAtMs: start,
     };
-    currentMs += token === "a" ? preset.targetRangedSwingMs : 1500 / preset.hasteFactor;
+
+    if (token === "a") {
+      nextAutoAt = start + preset.targetRangedSwingMs;
+    }
+    if (timing.usesGcd) {
+      gcdReadyAt = start + TIMING.gcdMs;
+    }
+    currentMs = start + timing.castMs;
+
     return event;
   });
 }

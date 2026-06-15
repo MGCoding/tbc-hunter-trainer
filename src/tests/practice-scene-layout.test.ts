@@ -8,7 +8,15 @@ vi.mock("phaser", () => ({
   },
 }));
 
-import { calculatePracticeLayout, canDrawPracticeField, getPracticeGridStep } from "../game/PracticeScene";
+import {
+  calculatePracticeLayout,
+  canDrawPracticeField,
+  getCastBarDisplay,
+  getMeleeBarColor,
+  getPracticeGridStep,
+} from "../game/PracticeScene";
+import { getRotationPreset } from "../data/rotations";
+import type { SimulatorState } from "../sim/types";
 
 function expectTargetAndHudVisible(width: number, height: number, margin: number): void {
   const layout = calculatePracticeLayout(width, height);
@@ -53,5 +61,45 @@ describe("PracticeScene layout", () => {
 
     expect(getPracticeGridStep(layout)).toBe(0);
     expect(canDrawPracticeField(0, 0, layout)).toBe(false);
+  });
+
+  it("turns the melee bar green only while in melee range", () => {
+    expect(getMeleeBarColor({ distanceYards: 2, canMelee: true, canUseRanged: false })).toBe(0x7fd1a8);
+    expect(getMeleeBarColor({ distanceYards: 2.01, canMelee: false, canUseRanged: true })).toBe(0xd9664f);
+  });
+
+  it("shows auto-shot windup in the cast bar when no spell cast is active", () => {
+    const preset = getRotationPreset("one-one");
+    const autoWindupMs = 500 / preset.hasteFactor;
+    const state: SimulatorState = {
+      nowMs: preset.targetRangedSwingMs - autoWindupMs / 2,
+      gcdReadyAtMs: 0,
+      nextAutoAtMs: preset.targetRangedSwingMs,
+      nextMeleeAtMs: preset.derivedMeleeSwingMs,
+      raptorReadyAtMs: 0,
+      activeCast: null,
+      queuedAbility: null,
+    };
+
+    expect(getCastBarDisplay(state, preset)).toEqual({
+      ability: "autoShot",
+      startedAtMs: preset.targetRangedSwingMs - autoWindupMs,
+      completesAtMs: preset.targetRangedSwingMs,
+    });
+  });
+
+  it("lets active spell casts overwrite auto-shot windup in the cast bar", () => {
+    const preset = getRotationPreset("one-one");
+    const state: SimulatorState = {
+      nowMs: preset.targetRangedSwingMs - 100,
+      gcdReadyAtMs: 0,
+      nextAutoAtMs: preset.targetRangedSwingMs,
+      nextMeleeAtMs: preset.derivedMeleeSwingMs,
+      raptorReadyAtMs: 0,
+      activeCast: { ability: "steadyShot", startedAtMs: 900, completesAtMs: 1900 },
+      queuedAbility: null,
+    };
+
+    expect(getCastBarDisplay(state, preset)).toEqual(state.activeCast);
   });
 });

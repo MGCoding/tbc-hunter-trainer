@@ -36,17 +36,17 @@ describe("movement", () => {
     expect(getRangeState(start).canMelee).toBe(false);
     expect(getRangeState(start).canUseRanged).toBe(true);
 
-    const inMelee = createInitialPosition(4.8);
+    const inMelee = createInitialPosition(1.8);
     expect(getRangeState(inMelee).canMelee).toBe(true);
     expect(getRangeState(inMelee).canUseRanged).toBe(false);
   });
 
   it("computes melee and ranged legality at range boundaries", () => {
-    const exactMelee = getRangeState(createInitialPosition(5));
+    const exactMelee = getRangeState(createInitialPosition(2));
     expect(exactMelee.canMelee).toBe(true);
     expect(exactMelee.canUseRanged).toBe(false);
 
-    const justOverMelee = getRangeState(createInitialPosition(5.01));
+    const justOverMelee = getRangeState(createInitialPosition(2.01));
     expect(justOverMelee.canMelee).toBe(false);
     expect(justOverMelee.canUseRanged).toBe(true);
 

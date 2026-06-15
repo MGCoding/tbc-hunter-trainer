@@ -16,8 +16,8 @@ export const TIMING = {
 export const MOVEMENT = {
   yardsPerSecond: 7,
   strafeYardsPerSecond: 7,
-  meleeRangeYards: 5,
-  minimumRangedRangeYards: 5,
+  meleeRangeYards: 2,
+  minimumRangedRangeYards: 2,
   maximumRangedRangeYards: 35,
   startingDistanceYards: 7.8,
 } as const;

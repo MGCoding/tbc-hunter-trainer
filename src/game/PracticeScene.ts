@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 
 import { MOVEMENT, TIMING } from "../data/constants";
-import type { PracticePosition, PracticeState, RotationPreset, SimulatorState } from "../sim/types";
+import type { ActiveCast, PracticePosition, PracticeState, RangeState, RotationPreset, SimulatorState } from "../sim/types";
 
 export interface PracticeSceneData {
   preset: RotationPreset;
@@ -14,6 +14,8 @@ const TARGET_YARDS = MOVEMENT.startingDistanceYards;
 const MAX_PLAYER_RADIUS = 14;
 const MAX_TARGET_RADIUS = 18;
 const MAX_BAR_WIDTH = 260;
+const MELEE_READY_COLOR = 0x7fd1a8;
+const MELEE_WAITING_COLOR = 0xd9664f;
 
 interface HudLayout {
   top: number;
@@ -48,6 +50,28 @@ function remainingProgress(nowMs: number, nextAtMs: number, durationMs: number):
   }
 
   return clamp01(1 - Math.max(0, nextAtMs - nowMs) / durationMs);
+}
+
+export function getMeleeBarColor(range: RangeState): number {
+  return range.canMelee ? MELEE_READY_COLOR : MELEE_WAITING_COLOR;
+}
+
+export function getCastBarDisplay(state: SimulatorState, preset: RotationPreset): ActiveCast | null {
+  if (state.activeCast !== null) {
+    return state.activeCast;
+  }
+
+  const windupMs = TIMING.autoWindupMs / preset.hasteFactor;
+  const startedAtMs = state.nextAutoAtMs - windupMs;
+  if (state.nowMs < startedAtMs || state.nowMs > state.nextAutoAtMs) {
+    return null;
+  }
+
+  return {
+    ability: "autoShot",
+    startedAtMs,
+    completesAtMs: state.nextAutoAtMs,
+  };
 }
 
 export function calculatePracticeLayout(width: number, height: number): PracticeLayout {
@@ -149,7 +173,7 @@ export class PracticeScene extends Phaser.Scene {
     const state = this.getPracticeState();
     this.cameras.main.centerOn(0, 0);
     this.drawField(state);
-    this.drawHud(state.simulator);
+    this.drawHud(state);
   }
 
   shutdown(): void {
@@ -234,13 +258,14 @@ export class PracticeScene extends Phaser.Scene {
     this.distanceLabel.setText(`${state.range.distanceYards.toFixed(1)} yd`);
   }
 
-  private drawHud(state: SimulatorState): void {
+  private drawHud(practiceState: PracticeState): void {
     const camera = this.cameras.main;
+    const state = practiceState.simulator;
     const { hud } = calculatePracticeLayout(camera.width, camera.height);
 
     this.hud.clear();
 
-    const activeCast = state.activeCast;
+    const activeCast = getCastBarDisplay(state, this.preset);
     const castDuration = activeCast ? activeCast.completesAtMs - activeCast.startedAtMs : 1;
     const castProgress = activeCast ? clamp01((state.nowMs - activeCast.startedAtMs) / castDuration) : 0;
     this.drawBar(hud.left, hud.top, hud.width, hud.castHeight, castProgress, 0xd7a84a, 0.95);
@@ -250,7 +275,7 @@ export class PracticeScene extends Phaser.Scene {
 
     const meleeTop = hud.top + hud.castHeight + hud.gap;
     const meleeProgress = remainingProgress(state.nowMs, state.nextMeleeAtMs, this.preset.derivedMeleeSwingMs);
-    this.drawBar(hud.left, meleeTop, hud.width, hud.barHeight, meleeProgress, 0xd9664f, 0.88);
+    this.drawBar(hud.left, meleeTop, hud.width, hud.barHeight, meleeProgress, getMeleeBarColor(practiceState.range), 0.88);
 
     const rangedTop = meleeTop + hud.barHeight + hud.gap;
     const rangedProgress = remainingProgress(state.nowMs, state.nextAutoAtMs, this.preset.targetRangedSwingMs);

@@ -24,6 +24,18 @@ export function findActionForBinding(bindings: KeybindingMap, binding: KeyBindin
   return null;
 }
 
+export function formatKeyBinding(binding: KeyBinding, style: "compact" | "long" = "compact"): string {
+  if (binding.kind === "mouse") {
+    return `${style === "compact" ? "M" : "Mouse"}${binding.button + 1}`;
+  }
+
+  if (binding.code === "") {
+    return "";
+  }
+
+  return binding.code.replace(/^Key/, "").replace(/^Digit/, "");
+}
+
 export function rebindAction(
   bindings: KeybindingMap,
   action: ActionId,

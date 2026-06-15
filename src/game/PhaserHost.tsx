@@ -68,7 +68,7 @@ export function PhaserHost({
 
       const game = new Phaser.Game(config);
       gameRef.current = game;
-      game.scene.add("PracticeScene", PracticeScene, true, { preset, getPracticeState });
+      game.scene.add("PracticeScene", PracticeScene, true, { preset, getPracticeState, getKeybindings });
     }
 
     void createGame();

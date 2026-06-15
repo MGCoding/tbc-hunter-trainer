@@ -20,7 +20,7 @@ import type {
   SimEvent,
   SimulatorState,
 } from "./sim/types";
-import { rebindAction, type KeybindingMap } from "./input/keybindings";
+import { formatKeyBinding, rebindAction, type KeybindingMap } from "./input/keybindings";
 import { ControlPanel } from "./ui/ControlPanel";
 import { EventLogPanel } from "./ui/EventLogPanel";
 import { ReferencePanel } from "./ui/ReferencePanel";
@@ -69,18 +69,6 @@ export function readSimulatorStateAtSessionNow(
   }
 
   return simulator.getState();
-}
-
-function formatBinding(binding: KeyBinding): string {
-  if (binding.kind === "mouse") {
-    return `Mouse${binding.button + 1}`;
-  }
-
-  if (binding.code === "") {
-    return "Unbound";
-  }
-
-  return binding.code.replace(/^Key/, "").replace(/^Digit/, "");
 }
 
 export function App() {
@@ -297,7 +285,7 @@ export function App() {
             {KEYBINDING_ROWS.map(({ action, label }) => (
               <div className="keybinding-row" key={action}>
                 <span>{label}</span>
-                <strong>{formatBinding(keybindings[action])}</strong>
+                <strong>{formatKeyBinding(keybindings[action], "long") || "Unbound"}</strong>
                 <button
                   type="button"
                   className="secondary-button"

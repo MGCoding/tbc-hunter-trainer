@@ -30,6 +30,7 @@ export class Simulator {
     return {
       ...this.state,
       activeCast: this.state.activeCast ? { ...this.state.activeCast } : null,
+      abilityReadyAtMs: { ...this.cooldownReadyAtMs },
     };
   }
 

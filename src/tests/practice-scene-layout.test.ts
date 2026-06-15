@@ -11,10 +11,13 @@ vi.mock("phaser", () => ({
 import {
   calculatePracticeLayout,
   canDrawPracticeField,
+  getAbilityIconViews,
   getCastBarDisplay,
   getMeleeBarColor,
   getPracticeGridStep,
+  WOWHEAD_ICON_BASE_URL,
 } from "../game/PracticeScene";
+import { DEFAULT_KEYBINDS } from "../data/constants";
 import { getRotationPreset } from "../data/rotations";
 import type { SimulatorState } from "../sim/types";
 
@@ -63,6 +66,14 @@ describe("PracticeScene layout", () => {
     expect(canDrawPracticeField(0, 0, layout)).toBe(false);
   });
 
+  it("places ability icons below the timing bars inside the HUD stack", () => {
+    const layout = calculatePracticeLayout(900, 800);
+    const rangedBottom = layout.hud.top + layout.hud.castHeight + layout.hud.gap + layout.hud.barHeight + layout.hud.gap + layout.hud.barHeight;
+
+    expect(layout.hud.iconTop).toBeGreaterThan(rangedBottom);
+    expect(layout.hud.iconTop + layout.hud.iconSize).toBeLessThanOrEqual(layout.hud.top + layout.hud.totalHeight);
+  });
+
   it("turns the melee bar green only while in melee range", () => {
     expect(getMeleeBarColor({ distanceYards: 2, canMelee: true, canUseRanged: false })).toBe(0x7fd1a8);
     expect(getMeleeBarColor({ distanceYards: 2.01, canMelee: false, canUseRanged: true })).toBe(0xd9664f);
@@ -101,5 +112,46 @@ describe("PracticeScene layout", () => {
     };
 
     expect(getCastBarDisplay(state, preset)).toEqual(state.activeCast);
+  });
+
+  it("builds ability icon views with Wowhead icons, cooldown labels, and hotkeys", () => {
+    const preset = getRotationPreset("one-one");
+    const state: SimulatorState = {
+      nowMs: 1000,
+      gcdReadyAtMs: 0,
+      nextAutoAtMs: 3000,
+      nextMeleeAtMs: 500,
+      raptorReadyAtMs: 0,
+      activeCast: null,
+      queuedAbility: null,
+      abilityReadyAtMs: {
+        arcaneShot: 5200,
+        multiShot: 10_000,
+        killCommand: 1000,
+      },
+    };
+
+    const views = getAbilityIconViews(state, preset, DEFAULT_KEYBINDS);
+
+    expect(views).toHaveLength(6);
+    expect(views[0]).toMatchObject({
+      action: "arcaneShot",
+      hotkey: "1",
+      cooldownLabel: "4.2",
+      isReady: false,
+      iconUrl: `${WOWHEAD_ICON_BASE_URL}ability_impalingbolt.jpg`,
+    });
+    expect(views.find((view) => view.action === "steadyShot")).toMatchObject({
+      hotkey: "4",
+      cooldownLabel: "",
+      isReady: true,
+      iconUrl: `${WOWHEAD_ICON_BASE_URL}ability_hunter_steadyshot.jpg`,
+    });
+    expect(views.find((view) => view.action === "autoShot")).toMatchObject({
+      hotkey: "V",
+      cooldownLabel: "2.0",
+      isReady: false,
+      iconUrl: `${WOWHEAD_ICON_BASE_URL}ability_whirlwind.jpg`,
+    });
   });
 });

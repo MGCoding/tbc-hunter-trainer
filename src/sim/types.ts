@@ -127,6 +127,7 @@ export interface SimulatorState {
   raptorReadyAtMs: number;
   activeCast: ActiveCast | null;
   queuedAbility: AbilityId | null;
+  abilityReadyAtMs?: Partial<Record<AbilityId, number>>;
 }
 
 export interface PracticeState {

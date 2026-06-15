@@ -1,12 +1,25 @@
 import Phaser from "phaser";
 
 import { MOVEMENT, TIMING } from "../data/constants";
-import type { ActiveCast, PracticePosition, PracticeState, RangeState, RotationPreset, SimulatorState } from "../sim/types";
+import { formatKeyBinding, type KeybindingMap } from "../input/keybindings";
+import type {
+  AbilityActionId,
+  AbilityId,
+  ActiveCast,
+  PracticePosition,
+  PracticeState,
+  RangeState,
+  RotationPreset,
+  SimulatorState,
+} from "../sim/types";
 
 export interface PracticeSceneData {
   preset: RotationPreset;
   getPracticeState: () => PracticeState;
+  getKeybindings: () => KeybindingMap;
 }
+
+export const WOWHEAD_ICON_BASE_URL = "https://wow.zamimg.com/images/wow/icons/large/";
 
 const MAX_YARD_PX = 34;
 const GRID_YARDS = 5;
@@ -14,8 +27,53 @@ const TARGET_YARDS = MOVEMENT.startingDistanceYards;
 const MAX_PLAYER_RADIUS = 14;
 const MAX_TARGET_RADIUS = 18;
 const MAX_BAR_WIDTH = 260;
+const ICON_COUNT = 6;
 const MELEE_READY_COLOR = 0x7fd1a8;
 const MELEE_WAITING_COLOR = 0xd9664f;
+
+const ABILITY_ICON_DEFS = [
+  {
+    action: "arcaneShot",
+    ability: "arcaneShot",
+    label: "Arcane",
+    icon: "ability_impalingbolt.jpg",
+  },
+  {
+    action: "killCommand",
+    ability: "killCommand",
+    label: "Kill",
+    icon: "ability_hunter_killcommand.jpg",
+  },
+  {
+    action: "multiShot",
+    ability: "multiShot",
+    label: "Multi",
+    icon: "ability_upgrademoonglaive.jpg",
+  },
+  {
+    action: "steadyShot",
+    ability: "steadyShot",
+    label: "Steady",
+    icon: "ability_hunter_steadyshot.jpg",
+  },
+  {
+    action: "raptorStrike",
+    ability: "raptorStrike",
+    label: "Melee",
+    icon: "ability_meleedamage.jpg",
+  },
+  {
+    action: "autoShot",
+    ability: "autoShot",
+    label: "Auto",
+    icon: "ability_whirlwind.jpg",
+  },
+] as const satisfies {
+  action: AbilityActionId;
+  ability: AbilityId;
+  label: string;
+  icon: string;
+}[];
 
 interface HudLayout {
   top: number;
@@ -23,8 +81,29 @@ interface HudLayout {
   width: number;
   castHeight: number;
   barHeight: number;
+  iconTop: number;
+  iconSize: number;
+  iconGap: number;
   gap: number;
   totalHeight: number;
+}
+
+interface AbilityIconObject {
+  image: Phaser.GameObjects.Image;
+  hotkeyText: Phaser.GameObjects.Text;
+  cooldownText: Phaser.GameObjects.Text;
+}
+
+export interface AbilityIconView {
+  action: AbilityActionId;
+  ability: AbilityId;
+  label: string;
+  iconKey: string;
+  iconUrl: string;
+  hotkey: string;
+  cooldownLabel: string;
+  cooldownRemainingMs: number;
+  isReady: boolean;
 }
 
 export interface PracticeLayout {
@@ -50,6 +129,53 @@ function remainingProgress(nowMs: number, nextAtMs: number, durationMs: number):
   }
 
   return clamp01(1 - Math.max(0, nextAtMs - nowMs) / durationMs);
+}
+
+function formatCooldown(remainingMs: number): string {
+  const seconds = Math.max(0, remainingMs) / 1000;
+  return seconds >= 10 ? `${Math.ceil(seconds)}` : seconds.toFixed(1);
+}
+
+function getAbilityReadyAtMs(action: AbilityActionId, state: SimulatorState): number {
+  if (action === "autoShot") {
+    return state.nextAutoAtMs;
+  }
+
+  if (action === "raptorStrike") {
+    return Math.min(state.raptorReadyAtMs, state.nextMeleeAtMs);
+  }
+
+  const abilityReadyAtMs = state.abilityReadyAtMs?.[action] ?? 0;
+  if (action === "arcaneShot" || action === "multiShot" || action === "steadyShot") {
+    return Math.max(state.gcdReadyAtMs, abilityReadyAtMs);
+  }
+
+  return abilityReadyAtMs;
+}
+
+export function getAbilityIconViews(
+  state: SimulatorState,
+  preset: RotationPreset,
+  keybindings: KeybindingMap,
+): AbilityIconView[] {
+  void preset;
+
+  return ABILITY_ICON_DEFS.map((definition) => {
+    const readyAtMs = getAbilityReadyAtMs(definition.action, state);
+    const cooldownRemainingMs = Math.max(0, readyAtMs - state.nowMs);
+
+    return {
+      action: definition.action,
+      ability: definition.ability,
+      label: definition.label,
+      iconKey: `ability-icon-${definition.action}`,
+      iconUrl: `${WOWHEAD_ICON_BASE_URL}${definition.icon}`,
+      hotkey: formatKeyBinding(keybindings[definition.action]),
+      cooldownLabel: cooldownRemainingMs > 0 ? formatCooldown(cooldownRemainingMs) : "",
+      cooldownRemainingMs,
+      isReady: cooldownRemainingMs === 0,
+    };
+  });
 }
 
 export function getMeleeBarColor(range: RangeState): number {
@@ -90,11 +216,14 @@ export function calculatePracticeLayout(width: number, height: number): Practice
   const barWidth = Math.min(compactHud ? 220 : MAX_BAR_WIDTH, Math.max(148, width - 40));
   const castHeight = compactHud ? 12 : 18;
   const barHeight = compactHud ? 8 : 14;
+  const iconSize = compactHud ? 28 : 36;
+  const iconGap = compactHud ? 5 : 7;
   const gap = compactHud ? 4 : 8;
-  const totalHeight = castHeight + gap + barHeight + gap + barHeight;
+  const totalHeight = castHeight + gap + barHeight + gap + barHeight + gap + iconSize;
   const bottomMargin = 8;
   const preferredTop = height / 2 + playerRadius + (compactHud ? 20 : 54);
   const top = clamp(preferredTop, bottomMargin, Math.max(bottomMargin, height - bottomMargin - totalHeight));
+  const rangedTop = top + castHeight + gap + barHeight + gap;
 
   return {
     yardPx,
@@ -108,6 +237,9 @@ export function calculatePracticeLayout(width: number, height: number): Practice
       width: barWidth,
       castHeight,
       barHeight,
+      iconTop: rangedTop + barHeight + gap,
+      iconSize,
+      iconGap,
       gap,
       totalHeight,
     },
@@ -125,10 +257,12 @@ export function canDrawPracticeField(width: number, height: number, layout: Pick
 export class PracticeScene extends Phaser.Scene {
   private preset!: RotationPreset;
   private getPracticeState!: () => PracticeState;
+  private getKeybindings!: () => KeybindingMap;
   private field!: Phaser.GameObjects.Graphics;
   private hud!: Phaser.GameObjects.Graphics;
   private castLabel!: Phaser.GameObjects.Text;
   private distanceLabel!: Phaser.GameObjects.Text;
+  private abilityIcons: AbilityIconObject[] = [];
 
   constructor() {
     super("PracticeScene");
@@ -137,6 +271,25 @@ export class PracticeScene extends Phaser.Scene {
   init(data: PracticeSceneData): void {
     this.preset = data.preset;
     this.getPracticeState = data.getPracticeState;
+    this.getKeybindings = data.getKeybindings;
+  }
+
+  preload(): void {
+    for (const view of getAbilityIconViews(
+      {
+        nowMs: 0,
+        gcdReadyAtMs: 0,
+        nextAutoAtMs: this.preset.targetRangedSwingMs,
+        nextMeleeAtMs: this.preset.derivedMeleeSwingMs,
+        raptorReadyAtMs: 0,
+        activeCast: null,
+        queuedAbility: null,
+      },
+      this.preset,
+      this.getKeybindings(),
+    )) {
+      this.load.image(view.iconKey, view.iconUrl);
+    }
   }
 
   create(): void {
@@ -163,6 +316,33 @@ export class PracticeScene extends Phaser.Scene {
         fontStyle: "700",
       })
       .setOrigin(0.5);
+    this.abilityIcons = ABILITY_ICON_DEFS.map(() => {
+      const image = this.add.image(0, 0, "").setScrollFactor(0);
+      const hotkeyText = this.add
+        .text(0, 0, "", {
+          color: "#f4f2ed",
+          fontFamily: "Inter, Arial, sans-serif",
+          fontSize: "10px",
+          fontStyle: "800",
+          stroke: "#080b0e",
+          strokeThickness: 3,
+        })
+        .setOrigin(1, 1)
+        .setScrollFactor(0);
+      const cooldownText = this.add
+        .text(0, 0, "", {
+          color: "#ffffff",
+          fontFamily: "Inter, Arial, sans-serif",
+          fontSize: "13px",
+          fontStyle: "900",
+          stroke: "#080b0e",
+          strokeThickness: 4,
+        })
+        .setOrigin(0.5)
+        .setScrollFactor(0);
+
+      return { image, hotkeyText, cooldownText };
+    });
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
@@ -281,6 +461,7 @@ export class PracticeScene extends Phaser.Scene {
     const rangedProgress = remainingProgress(state.nowMs, state.nextAutoAtMs, this.preset.targetRangedSwingMs);
     this.drawBar(hud.left, rangedTop, hud.width, hud.barHeight, rangedProgress, 0x7e9dbc, 0.92);
     this.drawRangedSparks(hud.left, rangedTop, hud.width, hud.barHeight, state);
+    this.drawAbilityIcons(hud, getAbilityIconViews(state, this.preset, this.getKeybindings()));
   }
 
   private drawBar(x: number, y: number, width: number, height: number, progress: number, color: number, alpha: number): void {
@@ -315,6 +496,43 @@ export class PracticeScene extends Phaser.Scene {
 
       this.hud.lineStyle(2, spark.color, isPassed ? spark.alpha * 0.55 : spark.alpha);
       this.hud.lineBetween(sparkX, y - 3, sparkX, y + height + 3);
+    }
+  }
+
+  private drawAbilityIcons(hud: HudLayout, views: AbilityIconView[]): void {
+    const totalWidth = ICON_COUNT * hud.iconSize + (ICON_COUNT - 1) * hud.iconGap;
+    const startX = hud.left + hud.width / 2 - totalWidth / 2;
+
+    for (let index = 0; index < views.length; index += 1) {
+      const view = views[index];
+      const object = this.abilityIcons[index];
+      const x = startX + index * (hud.iconSize + hud.iconGap);
+      const y = hud.iconTop;
+      const centerX = x + hud.iconSize / 2;
+      const centerY = y + hud.iconSize / 2;
+
+      this.hud.fillStyle(0x080b0e, 0.78);
+      this.hud.fillRoundedRect(x, y, hud.iconSize, hud.iconSize, 5);
+      this.hud.lineStyle(1, view.isReady ? 0xf5df9f : 0xf4f2ed, view.isReady ? 0.62 : 0.24);
+      this.hud.strokeRoundedRect(x, y, hud.iconSize, hud.iconSize, 5);
+
+      object.image.setTexture(view.iconKey);
+      object.image.setPosition(centerX, centerY);
+      object.image.setDisplaySize(hud.iconSize - 4, hud.iconSize - 4);
+      object.image.setAlpha(view.isReady ? 1 : 0.42);
+
+      if (!view.isReady) {
+        this.hud.fillStyle(0x080b0e, 0.45);
+        this.hud.fillRoundedRect(x + 2, y + 2, hud.iconSize - 4, hud.iconSize - 4, 4);
+      }
+
+      object.hotkeyText.setText(view.hotkey);
+      object.hotkeyText.setPosition(x + hud.iconSize - 3, y + hud.iconSize - 2);
+      object.hotkeyText.setFontSize(hud.iconSize < 32 ? 9 : 10);
+
+      object.cooldownText.setText(view.cooldownLabel);
+      object.cooldownText.setPosition(centerX, centerY);
+      object.cooldownText.setFontSize(hud.iconSize < 32 ? 11 : 13);
     }
   }
 }

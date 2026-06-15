@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_KEYBINDS } from "../data/constants";
 import { attachBrowserInput } from "../input/browserInput";
-import { findActionForBinding, rebindAction } from "../input/keybindings";
+import { findActionForBinding, formatKeyBinding, rebindAction } from "../input/keybindings";
 import type { KeyBinding } from "../sim/types";
 
 describe("keybindings", () => {
@@ -19,6 +19,14 @@ describe("keybindings", () => {
 
     expect(rebound.arcaneShot).toEqual({ kind: "keyboard", code: "Digit3" });
     expect(rebound.multiShot).toEqual({ kind: "keyboard", code: "" });
+  });
+
+  it("formats keybindings for compact HUD labels", () => {
+    expect(formatKeyBinding({ kind: "keyboard", code: "Digit1" })).toBe("1");
+    expect(formatKeyBinding({ kind: "keyboard", code: "KeyV" })).toBe("V");
+    expect(formatKeyBinding({ kind: "mouse", button: 3 })).toBe("M4");
+    expect(formatKeyBinding({ kind: "mouse", button: 3 }, "long")).toBe("Mouse4");
+    expect(formatKeyBinding({ kind: "keyboard", code: "" })).toBe("");
   });
 });
 

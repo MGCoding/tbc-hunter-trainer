@@ -47,6 +47,57 @@ describe("simulator", () => {
     expect(sim.getState().nextAutoAtMs).toBeGreaterThan(sim.getState().nowMs);
   });
 
+  it("pauses Auto Shot immediately after one successful Raptor Strike press", () => {
+    const sim = createSimulator(getRotationPreset("one-one"));
+
+    sim.pressAbility("raptorStrike", 1000);
+
+    expect(sim.getLog()).toContainEqual({ type: "cast-start", atMs: 1000, ability: "raptorStrike" });
+    expect(sim.getLog()).toContainEqual({ type: "auto-paused", atMs: 1000, ability: "autoShot" });
+    expect(sim.getState().autoPaused).toBe(true);
+  });
+
+  it("keeps ranged timer state advancing but prevents auto-fire while Auto Shot is paused", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+
+    sim.pressAbility("raptorStrike", 1000);
+    sim.tick(preset.targetRangedSwingMs + preset.targetRangedSwingMs);
+
+    expect(sim.getState().nowMs).toBe(preset.targetRangedSwingMs + preset.targetRangedSwingMs);
+    expect(sim.getState().nextAutoAtMs).toBe(preset.targetRangedSwingMs);
+    expect(sim.getLog().some((event) => event.type === "auto-fire")).toBe(false);
+  });
+
+  it("requires Auto Shot input to resume and starts a fresh windup when resumed past the spark", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+    const windupMs = 500 / preset.hasteFactor;
+    const resumeAtMs = preset.targetRangedSwingMs + 750;
+
+    sim.pressAbility("raptorStrike", 1000);
+    sim.tick(resumeAtMs);
+    sim.pressAbility("autoShot", resumeAtMs);
+
+    expect(sim.getLog()).toContainEqual({ type: "auto-resumed", atMs: resumeAtMs, ability: "autoShot" });
+    expect(sim.getState().autoPaused).toBe(false);
+    expect(sim.getState().nextAutoAtMs).toBeCloseTo(resumeAtMs + windupMs);
+    expect(sim.getLog().some((event) => event.type === "auto-fire")).toBe(false);
+
+    sim.tick(resumeAtMs + windupMs);
+
+    expect(sim.getLog()).toContainEqual({
+      type: "auto-windup",
+      atMs: resumeAtMs,
+      ability: "autoShot",
+    });
+    expect(sim.getLog()).toContainEqual({
+      type: "auto-fire",
+      atMs: resumeAtMs + windupMs,
+      ability: "autoShot",
+    });
+  });
+
   it("clips Auto Shot when Multi-Shot is still casting at no-move/no-cast spark", () => {
     const sim = createSimulator(getRotationPreset("french-weaving-5511-3w"));
     const spark = sim.getState().nextAutoAtMs - 500;

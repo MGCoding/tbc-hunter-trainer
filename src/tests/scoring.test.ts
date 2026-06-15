@@ -26,6 +26,9 @@ function drivePresetThroughSimulator(preset: RotationPreset): SimEvent[] {
     if (token === "a") {
       const autoCount = sim.getLog().filter((event) => event.type === "auto-fire").length;
       while (sim.getLog().filter((event) => event.type === "auto-fire").length === autoCount) {
+        if (sim.getState().autoPaused) {
+          sim.pressAbility("autoShot", sim.getState().nowMs);
+        }
         sim.tick(sim.getState().nextAutoAtMs);
       }
       continue;

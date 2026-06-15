@@ -98,6 +98,8 @@ export type SimEventType =
   | "queued"
   | "cast-start"
   | "cast-complete"
+  | "auto-paused"
+  | "auto-resumed"
   | "auto-windup"
   | "auto-fire"
   | "auto-clipped"
@@ -127,6 +129,7 @@ export interface SimulatorState {
   raptorReadyAtMs: number;
   activeCast: ActiveCast | null;
   queuedAbility: AbilityId | null;
+  autoPaused?: boolean;
   abilityReadyAtMs?: Partial<Record<AbilityId, number>>;
 }
 

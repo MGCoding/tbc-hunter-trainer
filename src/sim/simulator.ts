@@ -23,6 +23,7 @@ export class Simulator {
       raptorReadyAtMs: 0,
       activeCast: null,
       queuedAbility: null,
+      autoPaused: false,
     };
   }
 
@@ -57,6 +58,7 @@ export class Simulator {
     this.log.add({ type: "ability-press", atMs, ability });
 
     if (ability === "autoShot") {
+      this.resumeAutoShot(atMs);
       return;
     }
 
@@ -118,6 +120,7 @@ export class Simulator {
       const timing = getAbilityTiming("raptorStrike", this.preset);
       this.startCast("raptorStrike", atMs);
       this.state.raptorReadyAtMs = atMs + timing.cooldownMs;
+      this.pauseAutoShot(atMs);
       return;
     }
 
@@ -151,6 +154,29 @@ export class Simulator {
     this.state.activeCast = { ability, startedAtMs: atMs, completesAtMs };
   }
 
+  private pauseAutoShot(atMs: number): void {
+    if (this.state.autoPaused) {
+      return;
+    }
+
+    this.state.autoPaused = true;
+    this.log.add({ type: "auto-paused", atMs, ability: "autoShot" });
+  }
+
+  private resumeAutoShot(atMs: number): void {
+    if (!this.state.autoPaused) {
+      return;
+    }
+
+    const sparkAtMs = this.state.nextAutoAtMs - TIMING.noMoveNoCastLeadMs;
+    if (atMs >= sparkAtMs) {
+      this.state.nextAutoAtMs = atMs + TIMING.autoWindupMs / this.preset.hasteFactor;
+    }
+
+    this.state.autoPaused = false;
+    this.log.add({ type: "auto-resumed", atMs, ability: "autoShot" });
+  }
+
   private completeActiveCast(toMs: number): void {
     const active = this.state.activeCast;
     if (!active || active.completesAtMs > toMs) {
@@ -162,6 +188,10 @@ export class Simulator {
   }
 
   private processAutoWindow(toMs: number): void {
+    if (this.state.autoPaused) {
+      return;
+    }
+
     while (toMs >= this.state.nextAutoAtMs) {
       const currentAutoAtMs = this.state.nextAutoAtMs;
       const sparkAt = currentAutoAtMs - TIMING.noMoveNoCastLeadMs;

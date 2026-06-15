@@ -161,6 +161,20 @@ export function getAbilityIconViews(
   void preset;
 
   return ABILITY_ICON_DEFS.map((definition) => {
+    if (definition.action === "autoShot" && state.autoPaused) {
+      return {
+        action: definition.action,
+        ability: definition.ability,
+        label: definition.label,
+        iconKey: `ability-icon-${definition.action}`,
+        iconUrl: `${WOWHEAD_ICON_BASE_URL}${definition.icon}`,
+        hotkey: formatKeyBinding(keybindings[definition.action]),
+        cooldownLabel: "Paused",
+        cooldownRemainingMs: Number.POSITIVE_INFINITY,
+        isReady: false,
+      };
+    }
+
     const readyAtMs = getAbilityReadyAtMs(definition.action, state);
     const cooldownRemainingMs = Math.max(0, readyAtMs - state.nowMs);
 
@@ -284,6 +298,7 @@ export class PracticeScene extends Phaser.Scene {
         raptorReadyAtMs: 0,
         activeCast: null,
         queuedAbility: null,
+        autoPaused: false,
       },
       this.preset,
       this.getKeybindings(),

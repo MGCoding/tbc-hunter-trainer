@@ -124,6 +124,7 @@ describe("PracticeScene layout", () => {
       raptorReadyAtMs: 0,
       activeCast: null,
       queuedAbility: null,
+      autoPaused: false,
       abilityReadyAtMs: {
         arcaneShot: 5200,
         multiShot: 10_000,
@@ -152,6 +153,25 @@ describe("PracticeScene layout", () => {
       cooldownLabel: "2.0",
       isReady: false,
       iconUrl: `${WOWHEAD_ICON_BASE_URL}ability_whirlwind.jpg`,
+    });
+  });
+
+  it("marks Auto Shot unavailable while paused until the hotkey restarts it", () => {
+    const preset = getRotationPreset("one-one");
+    const state: SimulatorState = {
+      nowMs: 3000,
+      gcdReadyAtMs: 0,
+      nextAutoAtMs: 2000,
+      nextMeleeAtMs: preset.derivedMeleeSwingMs,
+      raptorReadyAtMs: 0,
+      activeCast: null,
+      queuedAbility: null,
+      autoPaused: true,
+    };
+
+    expect(getAbilityIconViews(state, preset, DEFAULT_KEYBINDS).find((view) => view.action === "autoShot")).toMatchObject({
+      cooldownLabel: "Paused",
+      isReady: false,
     });
   });
 });

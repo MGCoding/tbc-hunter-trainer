@@ -62,6 +62,10 @@ function tickUntilNextAutoFire(sim: ReturnType<typeof createSimulator>): {
   const startLogLength = sim.getLog().length;
 
   while (true) {
+    if (sim.getState().autoPaused) {
+      sim.pressAbility("autoShot", sim.getState().nowMs);
+    }
+
     sim.tick(sim.getState().nextAutoAtMs);
     const autoFires = sim.getLog().filter((event): event is SimEvent & { ability: "autoShot" } => {
       return event.type === "auto-fire" && event.ability === "autoShot";

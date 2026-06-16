@@ -2,8 +2,17 @@ import { describe, expect, it } from "vitest";
 import { TIMING } from "../data/constants";
 import { getRotationPreset, ROTATION_PRESETS } from "../data/rotations";
 import { getAbilityTiming } from "../sim/abilities";
-import { expandRotationPattern, parseRotationTokens } from "../sim/timeline";
-import type { AbilityId, IdealEvent, RotationPreset } from "../sim/types";
+import {
+  PERFECT_PRESS_TOLERANCE_MS,
+  actionMatchesIdealAbility,
+  describePerfectPressKey,
+  expandRotationPattern,
+  findPerfectPress,
+  getLoopedTimelinePosition,
+  getRotationPatternDurationMs,
+  parseRotationTokens,
+} from "../sim/timeline";
+import type { AbilityActionId, AbilityId, IdealEvent, RotationPreset } from "../sim/types";
 
 describe("abilities and timelines", () => {
   const abilityIds: AbilityId[] = [
@@ -124,6 +133,61 @@ describe("abilities and timelines", () => {
 
   it("throws when parsing unsupported rotation tokens", () => {
     expect(() => parseRotationTokens("asx")).toThrow("Unsupported rotation token: x");
+  });
+});
+
+describe("looped rotation timeline helpers", () => {
+  it("uses the last ideal event as the repeating pattern duration", () => {
+    const ideal = expandRotationPattern(getRotationPreset("one-one"));
+
+    expect(getRotationPatternDurationMs(ideal)).toBe(ideal.at(-1)!.idealAtMs);
+    expect(getRotationPatternDurationMs([])).toBe(0);
+  });
+
+  it("maps elapsed session time into rotation loop position", () => {
+    const ideal = expandRotationPattern(getRotationPreset("one-one"));
+    const patternDurationMs = getRotationPatternDurationMs(ideal);
+    const position = getLoopedTimelinePosition(ideal, patternDurationMs + 250);
+
+    expect(position).toEqual({
+      loopIndex: 1,
+      loopElapsedMs: 250,
+      patternDurationMs,
+    });
+  });
+
+  it("finds a perfect press within the timing tolerance", () => {
+    const ideal = expandRotationPattern(getRotationPreset("one-one"));
+    const steady = ideal.find((event) => event.ability === "steadyShot")!;
+    const result = findPerfectPress(ideal, "steadyShot", steady.idealAtMs + PERFECT_PRESS_TOLERANCE_MS);
+
+    expect(result).toMatchObject({
+      loopIndex: 0,
+      eventIndex: steady.index,
+      idealEvent: steady,
+      offsetMs: PERFECT_PRESS_TOLERANCE_MS,
+    });
+  });
+
+  it("rejects wrong, early, and late presses", () => {
+    const ideal = expandRotationPattern(getRotationPreset("one-one"));
+    const steady = ideal.find((event) => event.ability === "steadyShot")!;
+
+    expect(findPerfectPress(ideal, "arcaneShot", steady.idealAtMs)).toBeNull();
+    expect(findPerfectPress(ideal, "steadyShot", steady.idealAtMs - PERFECT_PRESS_TOLERANCE_MS - 1)).toBeNull();
+    expect(findPerfectPress(ideal, "steadyShot", steady.idealAtMs + PERFECT_PRESS_TOLERANCE_MS + 1)).toBeNull();
+  });
+
+  it("matches the melee action input to both Raptor Strike and white melee swing events", () => {
+    const actions: AbilityActionId[] = ["raptorStrike", "steadyShot"];
+
+    expect(actionMatchesIdealAbility(actions[0], "raptorStrike")).toBe(true);
+    expect(actionMatchesIdealAbility(actions[0], "meleeSwing")).toBe(true);
+    expect(actionMatchesIdealAbility(actions[1], "meleeSwing")).toBe(false);
+  });
+
+  it("describes duplicate suppression keys by loop and event index", () => {
+    expect(describePerfectPressKey({ loopIndex: 2, eventIndex: 7 })).toBe("2:7");
   });
 });
 

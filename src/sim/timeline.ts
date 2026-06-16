@@ -1,5 +1,5 @@
 import { createSimulator } from "./simulator";
-import type { AbilityId, IdealEvent, RotationPreset, RotationToken, SimEvent } from "./types";
+import type { AbilityActionId, AbilityId, IdealEvent, RotationPreset, RotationToken, SimEvent } from "./types";
 
 const TOKEN_TO_ABILITY: Record<RotationToken, AbilityId> = {
   a: "autoShot",
@@ -16,6 +16,99 @@ const TOKEN_TO_LABEL: Record<RotationToken, string> = {
   A: "Arcane",
   w: "Weave",
 };
+
+export const PERFECT_PRESS_TOLERANCE_MS = 100;
+
+export interface LoopedTimelinePosition {
+  loopIndex: number;
+  loopElapsedMs: number;
+  patternDurationMs: number;
+}
+
+export interface PerfectPressMatch {
+  loopIndex: number;
+  eventIndex: number;
+  idealEvent: IdealEvent;
+  offsetMs: number;
+}
+
+export interface PerfectPressKeyParts {
+  loopIndex: number;
+  eventIndex: number;
+}
+
+export function getRotationPatternDurationMs(ideal: IdealEvent[]): number {
+  return Math.max(0, ideal.at(-1)?.idealAtMs ?? 0);
+}
+
+export function getLoopedTimelinePosition(ideal: IdealEvent[], elapsedMs: number): LoopedTimelinePosition {
+  const patternDurationMs = getRotationPatternDurationMs(ideal);
+  if (patternDurationMs <= 0) {
+    return { loopIndex: 0, loopElapsedMs: 0, patternDurationMs: 0 };
+  }
+
+  const safeElapsedMs = Math.max(0, elapsedMs);
+  const loopIndex = Math.floor(safeElapsedMs / patternDurationMs);
+
+  return {
+    loopIndex,
+    loopElapsedMs: safeElapsedMs - loopIndex * patternDurationMs,
+    patternDurationMs,
+  };
+}
+
+export function actionMatchesIdealAbility(action: AbilityActionId, ability: AbilityId): boolean {
+  if (action === "raptorStrike") {
+    return ability === "raptorStrike" || ability === "meleeSwing";
+  }
+
+  return action === ability;
+}
+
+export function findPerfectPress(
+  ideal: IdealEvent[],
+  action: AbilityActionId,
+  elapsedMs: number,
+  toleranceMs = PERFECT_PRESS_TOLERANCE_MS,
+): PerfectPressMatch | null {
+  const position = getLoopedTimelinePosition(ideal, elapsedMs);
+  if (position.patternDurationMs <= 0) {
+    return null;
+  }
+
+  let best: PerfectPressMatch | null = null;
+  const candidateLoopIndexes = [position.loopIndex, position.loopIndex - 1, position.loopIndex + 1].filter(
+    (loopIndex) => loopIndex >= 0,
+  );
+  for (const event of ideal) {
+    if (!actionMatchesIdealAbility(action, event.ability)) {
+      continue;
+    }
+
+    for (const loopIndex of candidateLoopIndexes) {
+      const eventAtMs = loopIndex * position.patternDurationMs + event.idealAtMs;
+      const offsetMs = elapsedMs - eventAtMs;
+      if (Math.abs(offsetMs) > toleranceMs) {
+        continue;
+      }
+
+      if (best === null || Math.abs(offsetMs) < Math.abs(best.offsetMs)) {
+        best = {
+          loopIndex,
+          eventIndex: event.index,
+          idealEvent: event,
+          offsetMs,
+        };
+      }
+    }
+  }
+
+  return best;
+}
+
+export function describePerfectPressKey(parts: PerfectPressKeyParts): string {
+  return `${parts.loopIndex}:${parts.eventIndex}`;
+}
 
 export function parseRotationTokens(pattern: string): RotationToken[] {
   return pattern.split("").map((token) => {

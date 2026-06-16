@@ -36,7 +36,7 @@ function drivePresetThroughSimulator(preset: RotationPreset): SimEvent[] {
 
     const state = sim.getState();
     if (token === "w") {
-      const atMs = Math.max(state.nowMs, Math.min(state.raptorReadyAtMs, state.nextMeleeAtMs));
+      const atMs = Math.max(state.nowMs, state.nextMeleeAtMs);
       sim.pressAbility("raptorStrike", atMs);
       continue;
     }

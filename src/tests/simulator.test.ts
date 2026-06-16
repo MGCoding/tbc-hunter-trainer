@@ -47,25 +47,129 @@ describe("simulator", () => {
     expect(sim.getState().nextAutoAtMs).toBeGreaterThan(sim.getState().nowMs);
   });
 
-  it("pauses Auto Shot immediately after one successful Raptor Strike press", () => {
-    const sim = createSimulator(getRotationPreset("one-one"));
+  it("pauses Auto Shot immediately after one successful Raptor Strike melee swing", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
 
-    sim.pressAbility("raptorStrike", 1000);
+    sim.pressAbility("raptorStrike", preset.derivedMeleeSwingMs);
 
-    expect(sim.getLog()).toContainEqual({ type: "cast-start", atMs: 1000, ability: "raptorStrike" });
-    expect(sim.getLog()).toContainEqual({ type: "auto-paused", atMs: 1000, ability: "autoShot" });
+    expect(sim.getLog()).toContainEqual({ type: "cast-start", atMs: preset.derivedMeleeSwingMs, ability: "raptorStrike" });
+    expect(sim.getLog()).toContainEqual({ type: "auto-paused", atMs: preset.derivedMeleeSwingMs, ability: "autoShot" });
     expect(sim.getState().autoPaused).toBe(true);
+  });
+
+  it("keeps the successful Raptor Strike as the visible outcome of the first ready melee press", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+
+    sim.pressAbility("raptorStrike", preset.derivedMeleeSwingMs);
+
+    expect(sim.getLog().at(-1)).toEqual({
+      type: "cast-complete",
+      atMs: preset.derivedMeleeSwingMs,
+      ability: "raptorStrike",
+    });
+  });
+
+  it("does not fire Raptor Strike before the melee swing is ready", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+    const earlyAtMs = preset.derivedMeleeSwingMs - 100;
+
+    sim.pressAbility("raptorStrike", earlyAtMs);
+
+    expect(sim.getLog()).not.toContainEqual({ type: "cast-start", atMs: earlyAtMs, ability: "raptorStrike" });
+    expect(sim.getLog()).toContainEqual({
+      type: "invalid-input",
+      atMs: earlyAtMs,
+      ability: "raptorStrike",
+      reason: "melee-action-not-ready",
+    });
+    expect(sim.getState().autoPaused).toBe(false);
+  });
+
+  it("lets Raptor Strike fire during the GCD when the melee swing is ready", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+
+    sim.pressAbility("steadyShot", preset.derivedMeleeSwingMs - 100);
+    sim.pressAbility("raptorStrike", preset.derivedMeleeSwingMs);
+
+    expect(sim.getState().gcdReadyAtMs).toBeGreaterThan(preset.derivedMeleeSwingMs);
+    expect(sim.getLog()).toContainEqual({
+      type: "cast-start",
+      atMs: preset.derivedMeleeSwingMs,
+      ability: "raptorStrike",
+    });
   });
 
   it("keeps ranged timer state advancing but prevents auto-fire while Auto Shot is paused", () => {
     const preset = getRotationPreset("one-one");
     const sim = createSimulator(preset);
 
-    sim.pressAbility("raptorStrike", 1000);
+    sim.pressAbility("raptorStrike", preset.derivedMeleeSwingMs);
+    sim.resetLog();
+    sim.tick(preset.targetRangedSwingMs + preset.targetRangedSwingMs);
+
+    expect(sim.getState().nowMs).toBe(preset.targetRangedSwingMs + preset.targetRangedSwingMs);
+    expect(sim.getState().nextAutoAtMs).toBe(preset.targetRangedSwingMs + preset.targetRangedSwingMs);
+    expect(sim.getLog().some((event) => event.type === "auto-fire")).toBe(false);
+  });
+
+  it("keeps ranged timer state advancing but prevents auto-fire while ranged attacks are range-blocked", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+
+    sim.setAutoShotRangeAllowed(false, 1000);
     sim.tick(preset.targetRangedSwingMs + preset.targetRangedSwingMs);
 
     expect(sim.getState().nowMs).toBe(preset.targetRangedSwingMs + preset.targetRangedSwingMs);
     expect(sim.getState().nextAutoAtMs).toBe(preset.targetRangedSwingMs);
+    expect(sim.getState().autoRangeBlocked).toBe(true);
+    expect(sim.getLog().some((event) => event.type === "auto-fire")).toBe(false);
+  });
+
+  it("starts a fresh Auto Shot windup when ranged attacks are restored past the spark", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+    const windupMs = 500 / preset.hasteFactor;
+    const restoreAtMs = preset.targetRangedSwingMs + 750;
+
+    sim.setAutoShotRangeAllowed(false, 1000);
+    sim.tick(restoreAtMs);
+    sim.setAutoShotRangeAllowed(true, restoreAtMs);
+
+    expect(sim.getState().autoRangeBlocked).toBe(false);
+    expect(sim.getState().nextAutoAtMs).toBeCloseTo(restoreAtMs + windupMs);
+    expect(sim.getLog().some((event) => event.type === "auto-fire")).toBe(false);
+
+    sim.tick(restoreAtMs + windupMs);
+
+    expect(sim.getLog()).toContainEqual({
+      type: "auto-windup",
+      atMs: restoreAtMs,
+      ability: "autoShot",
+    });
+    expect(sim.getLog()).toContainEqual({
+      type: "auto-fire",
+      atMs: restoreAtMs + windupMs,
+      ability: "autoShot",
+    });
+  });
+
+  it("does not resume a manually paused Auto Shot when ranged attacks are restored", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+
+    sim.pressAbility("raptorStrike", preset.derivedMeleeSwingMs);
+    const restoreAtMs = sim.getState().nextAutoAtMs + 750;
+    sim.resetLog();
+    sim.setAutoShotRangeAllowed(false, preset.derivedMeleeSwingMs + 100);
+    sim.tick(restoreAtMs);
+    sim.setAutoShotRangeAllowed(true, restoreAtMs);
+
+    expect(sim.getState().autoPaused).toBe(true);
+    expect(sim.getState().autoRangeBlocked).toBe(false);
     expect(sim.getLog().some((event) => event.type === "auto-fire")).toBe(false);
   });
 
@@ -73,9 +177,10 @@ describe("simulator", () => {
     const preset = getRotationPreset("one-one");
     const sim = createSimulator(preset);
     const windupMs = 500 / preset.hasteFactor;
-    const resumeAtMs = preset.targetRangedSwingMs + 750;
 
-    sim.pressAbility("raptorStrike", 1000);
+    sim.pressAbility("raptorStrike", preset.derivedMeleeSwingMs);
+    const resumeAtMs = sim.getState().nextAutoAtMs + 750;
+    sim.resetLog();
     sim.tick(resumeAtMs);
     sim.pressAbility("autoShot", resumeAtMs);
 
@@ -97,6 +202,25 @@ describe("simulator", () => {
       ability: "autoShot",
     });
   });
+
+  it.each(["arcaneShot", "multiShot", "steadyShot"] as const)(
+    "starts Auto Shot when %s is pressed after Auto Shot was paused",
+    (ability) => {
+      const preset = getRotationPreset("one-one");
+      const sim = createSimulator(preset);
+      const windupMs = 500 / preset.hasteFactor;
+
+      sim.pressAbility("raptorStrike", preset.derivedMeleeSwingMs);
+      const resumeAtMs = sim.getState().nextAutoAtMs + 750;
+      sim.tick(resumeAtMs);
+      sim.pressAbility(ability, resumeAtMs);
+
+      expect(sim.getLog()).toContainEqual({ type: "auto-resumed", atMs: resumeAtMs, ability: "autoShot" });
+      expect(sim.getState().autoPaused).toBe(false);
+      expect(sim.getState().nextAutoAtMs).toBeCloseTo(resumeAtMs + windupMs);
+      expect(sim.getLog()).toContainEqual({ type: "cast-start", atMs: resumeAtMs, ability });
+    },
+  );
 
   it("clips Auto Shot when Multi-Shot is still casting at no-move/no-cast spark", () => {
     const sim = createSimulator(getRotationPreset("french-weaving-5511-3w"));

@@ -4,6 +4,7 @@ import { SessionLog } from "./sessionLog";
 import type { AbilityId, RotationPreset, SimEvent, SimulatorState } from "./types";
 
 const GCD_ABILITIES = new Set<AbilityId>(["steadyShot", "multiShot", "arcaneShot"]);
+const RANGED_ATTACK_ABILITIES = new Set<AbilityId>(["steadyShot", "multiShot", "arcaneShot"]);
 
 export function createSimulator(preset: RotationPreset): Simulator {
   return new Simulator(preset);
@@ -24,6 +25,7 @@ export class Simulator {
       activeCast: null,
       queuedAbility: null,
       autoPaused: false,
+      autoRangeBlocked: false,
     };
   }
 
@@ -51,6 +53,24 @@ export class Simulator {
     this.tick(atMs);
     this.log.add({ type: "ability-press", atMs, ability });
     this.log.add({ type: "invalid-input", atMs, ability, reason });
+  }
+
+  setAutoShotRangeAllowed(isAllowed: boolean, atMs: number): void {
+    if (!isAllowed) {
+      this.state.autoRangeBlocked = true;
+      this.tick(atMs);
+      return;
+    }
+
+    if (this.state.autoRangeBlocked) {
+      const sparkAtMs = this.state.nextAutoAtMs - TIMING.noMoveNoCastLeadMs;
+      if (!this.state.autoPaused && atMs >= sparkAtMs) {
+        this.state.nextAutoAtMs = atMs + TIMING.autoWindupMs / this.preset.hasteFactor;
+      }
+    }
+
+    this.state.autoRangeBlocked = false;
+    this.tick(atMs);
   }
 
   pressAbility(ability: AbilityId, atMs: number): void {
@@ -87,6 +107,10 @@ export class Simulator {
       return;
     }
 
+    if (RANGED_ATTACK_ABILITIES.has(ability)) {
+      this.resumeAutoShot(atMs);
+    }
+
     this.startCast(ability, atMs);
   }
 
@@ -116,21 +140,22 @@ export class Simulator {
   }
 
   private resolveMeleeAction(atMs: number): void {
-    if (atMs >= this.state.raptorReadyAtMs) {
-      const timing = getAbilityTiming("raptorStrike", this.preset);
-      this.startCast("raptorStrike", atMs);
-      this.state.raptorReadyAtMs = atMs + timing.cooldownMs;
-      this.pauseAutoShot(atMs);
+    if (atMs < this.state.nextMeleeAtMs) {
+      this.log.add({ type: "invalid-input", atMs, ability: "raptorStrike", reason: "melee-action-not-ready" });
       return;
     }
 
-    if (atMs >= this.state.nextMeleeAtMs) {
-      this.startCast("meleeSwing", atMs);
+    if (atMs >= this.state.raptorReadyAtMs) {
+      const timing = getAbilityTiming("raptorStrike", this.preset);
+      this.pauseAutoShot(atMs);
+      this.startCast("raptorStrike", atMs);
+      this.state.raptorReadyAtMs = atMs + timing.cooldownMs;
       this.state.nextMeleeAtMs = atMs + this.preset.derivedMeleeSwingMs;
       return;
     }
 
-    this.log.add({ type: "invalid-input", atMs, ability: "raptorStrike", reason: "melee-action-not-ready" });
+    this.startCast("meleeSwing", atMs);
+    this.state.nextMeleeAtMs = atMs + this.preset.derivedMeleeSwingMs;
   }
 
   private startCast(ability: AbilityId, atMs: number): void {
@@ -188,7 +213,7 @@ export class Simulator {
   }
 
   private processAutoWindow(toMs: number): void {
-    if (this.state.autoPaused) {
+    if (this.state.autoPaused || this.state.autoRangeBlocked) {
       return;
     }
 

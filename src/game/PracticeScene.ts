@@ -142,7 +142,7 @@ function getAbilityReadyAtMs(action: AbilityActionId, state: SimulatorState): nu
   }
 
   if (action === "raptorStrike") {
-    return Math.min(state.raptorReadyAtMs, state.nextMeleeAtMs);
+    return Math.max(state.raptorReadyAtMs, state.nextMeleeAtMs);
   }
 
   const abilityReadyAtMs = state.abilityReadyAtMs?.[action] ?? 0;

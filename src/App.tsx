@@ -16,6 +16,7 @@ import type {
   MovementKeys,
   PracticePosition,
   PracticeState,
+  RangeState,
   ScoreResult,
   SimEvent,
   SimulatorState,
@@ -126,9 +127,23 @@ export function App() {
     return elapsedMs;
   }
 
+  function syncAutoShotRangeToElapsed(elapsedMs: number): RangeState {
+    const range = getRangeState(positionRef.current);
+    if (runningRef.current) {
+      getSimulator().setAutoShotRangeAllowed(range.canUseRanged, elapsedMs);
+    }
+    return range;
+  }
+
+  function syncLiveStateToNow(nowMs: number): { elapsedMs: number; range: RangeState } {
+    const elapsedMs = syncMovementToNow(nowMs);
+    const range = syncAutoShotRangeToElapsed(elapsedMs);
+    return { elapsedMs, range };
+  }
+
   const getPracticeState = useCallback((): PracticeState => {
     const nowMs = performance.now();
-    const elapsedMs = syncMovementToNow(nowMs);
+    const { range } = syncLiveStateToNow(nowMs);
     const simulator = getSimulator();
     const simulatorState = readSimulatorStateAtSessionNow(
       simulator,
@@ -143,7 +158,7 @@ export function App() {
         player: { ...positionRef.current.player },
         target: { ...positionRef.current.target },
       },
-      range: getRangeState(positionRef.current),
+      range,
     };
   }, []);
 
@@ -162,7 +177,7 @@ export function App() {
   function handleStop(): void {
     if (running) {
       const nowMs = performance.now();
-      syncMovementToNow(nowMs);
+      syncLiveStateToNow(nowMs);
       tickSimulatorToSessionNow(getSimulator(), nowMs, sessionStartedAtRef.current);
     }
 
@@ -193,9 +208,8 @@ export function App() {
         return;
       }
 
-      const atMs = syncMovementToNow(performance.now());
+      const { elapsedMs: atMs, range } = syncLiveStateToNow(performance.now());
       const simulator = getSimulator();
-      const range = getRangeState(positionRef.current);
       const timing = getAbilityTiming(action, preset);
       if ((timing.requiresMelee && !range.canMelee) || (timing.requiresRanged && !range.canUseRanged)) {
         simulator.recordInvalidInput(action, atMs, "out-of-range");
@@ -212,7 +226,7 @@ export function App() {
   function handleResetLog(): void {
     if (running) {
       const nowMs = performance.now();
-      syncMovementToNow(nowMs);
+      syncLiveStateToNow(nowMs);
       clearSimulatorLogAtSessionNow(getSimulator(), nowMs, sessionStartedAtRef.current);
     } else {
       getSimulator().resetLog();

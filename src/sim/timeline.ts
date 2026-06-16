@@ -86,7 +86,7 @@ function pressTokenAction(sim: ReturnType<typeof createSimulator>, token: Exclud
   const state = sim.getState();
 
   if (token === "w") {
-    sim.pressAbility("raptorStrike", Math.max(state.nowMs, Math.min(state.raptorReadyAtMs, state.nextMeleeAtMs)));
+    sim.pressAbility("raptorStrike", Math.max(state.nowMs, state.nextMeleeAtMs));
   } else {
     const ability = TOKEN_TO_ABILITY[token];
     sim.pressAbility(ability, Math.max(state.nowMs, state.gcdReadyAtMs, sim.getAbilityReadyAtMs(ability)));

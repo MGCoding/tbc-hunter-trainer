@@ -174,4 +174,23 @@ describe("PracticeScene layout", () => {
       isReady: false,
     });
   });
+
+  it("shows Raptor Strike waiting for the melee swing even when Raptor cooldown is ready", () => {
+    const preset = getRotationPreset("one-one");
+    const state: SimulatorState = {
+      nowMs: 1000,
+      gcdReadyAtMs: 0,
+      nextAutoAtMs: 3000,
+      nextMeleeAtMs: 1500,
+      raptorReadyAtMs: 0,
+      activeCast: null,
+      queuedAbility: null,
+      autoPaused: false,
+    };
+
+    expect(getAbilityIconViews(state, preset, DEFAULT_KEYBINDS).find((view) => view.action === "raptorStrike")).toMatchObject({
+      cooldownLabel: "0.5",
+      isReady: false,
+    });
+  });
 });

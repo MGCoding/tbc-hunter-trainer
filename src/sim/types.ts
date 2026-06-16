@@ -130,6 +130,7 @@ export interface SimulatorState {
   activeCast: ActiveCast | null;
   queuedAbility: AbilityId | null;
   autoPaused?: boolean;
+  autoRangeBlocked?: boolean;
   abilityReadyAtMs?: Partial<Record<AbilityId, number>>;
 }
 

@@ -92,6 +92,40 @@ describe("App UI", () => {
     expect(screen.queryByText("cast-start")).not.toBeInTheDocument();
   });
 
+  it("prevents automatic Auto Shot fires while the live player position is in melee range", () => {
+    const now = vi.spyOn(performance, "now");
+    now.mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
+    fireEvent.keyDown(document, { code: "KeyW" });
+    now.mockReturnValue(1_000);
+    fireEvent.keyUp(document, { code: "KeyW" });
+    now.mockReturnValue(6_000);
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+
+    expect(screen.queryByText("auto-fire")).not.toBeInTheDocument();
+  });
+
+  it("fires Raptor Strike from melee range when the melee swing is ready", () => {
+    const now = vi.spyOn(performance, "now");
+    now.mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
+    fireEvent.keyDown(document, { code: "KeyW" });
+    now.mockReturnValue(1_000);
+    fireEvent.keyUp(document, { code: "KeyW" });
+    now.mockReturnValue(2_600);
+    fireEvent.mouseDown(document, { button: 3 });
+
+    expect(screen.getByText("cast-start")).toBeInTheDocument();
+    expect(screen.getAllByText("raptorStrike").length).toBeGreaterThan(0);
+    expect(screen.queryByText("invalid-input")).not.toBeInTheDocument();
+  });
+
   it("logs melee actions as invalid when the player is out of melee range", () => {
     vi.spyOn(performance, "now").mockReturnValue(0);
     render(<App />);

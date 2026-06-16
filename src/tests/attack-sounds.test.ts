@@ -20,6 +20,7 @@ interface MockAudio {
 
 function createMockAudioFactory(options: {
   throwOnLoad?: boolean;
+  throwOnPlay?: boolean;
   rejectOnPlay?: boolean;
 } = {}) {
   const created: MockAudio[] = [];
@@ -40,6 +41,9 @@ function createMockAudioFactory(options: {
       },
       play: () => {
         played.push(audio);
+        if (options.throwOnPlay) {
+          throw new Error("play failed");
+        }
         if (options.rejectOnPlay) {
           return Promise.reject(new Error("play failed"));
         }
@@ -147,5 +151,17 @@ describe("attack sound player", () => {
     expect(() => playPlayer.playAttackSoundsForEvents([
       { type: "auto-windup", atMs: 1000, ability: "autoShot" },
     ])).not.toThrow();
+  });
+
+  it("swallows synchronous play exceptions", () => {
+    const playMocks = createMockAudioFactory({ throwOnPlay: true });
+    const playPlayer = createAttackSoundPlayer({ createAudio: playMocks.createAudio });
+
+    expect(() => playPlayer.playAttackSoundsForEvents([
+      { type: "auto-windup", atMs: 1000, ability: "autoShot" },
+    ])).not.toThrow();
+    expect(playMocks.played.map((audio) => audio.url)).toEqual([
+      `${ATTACK_SOUND_GROUPS.bowWindup[0].url}#clone`,
+    ]);
   });
 });

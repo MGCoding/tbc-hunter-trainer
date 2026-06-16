@@ -23,7 +23,7 @@ interface AudioLike {
   currentTime: number;
   load: () => void;
   play: () => Promise<void> | void;
-  cloneNode: (deep?: boolean) => AudioLike;
+  cloneNode: (deep?: boolean) => unknown;
 }
 
 type CreateAudio = (url: string) => AudioLike;
@@ -173,7 +173,7 @@ export function createAttackSoundPlayer(options: AttackSoundPlayerOptions = {}) 
     }
 
     try {
-      const audio = baseAudio.cloneNode(true);
+      const audio = baseAudio.cloneNode(true) as AudioLike;
       audio.volume = volume;
       audio.currentTime = 0;
       const playResult = audio.play();

@@ -144,21 +144,21 @@ export function createAttackSoundPlayer(options: AttackSoundPlayerOptions = {}) 
       return;
     }
 
+    didPreload = true;
+
     for (const variants of Object.values(ATTACK_SOUND_GROUPS)) {
       for (const variant of variants) {
-        const audio = createAudio(variant.url);
-        audio.preload = "auto";
-        audio.volume = volume;
-        loadedAudio.set(variant.url, audio);
         try {
+          const audio = createAudio(variant.url);
+          audio.preload = "auto";
+          audio.volume = volume;
+          loadedAudio.set(variant.url, audio);
           audio.load();
         } catch {
-          // Browser audio loading should never interrupt simulation playback.
+          // Browser audio setup should never interrupt simulation playback.
         }
       }
     }
-
-    didPreload = true;
   }
 
   function playGroup(groupId: AttackSoundGroupId): void {

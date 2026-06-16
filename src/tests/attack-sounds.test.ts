@@ -104,6 +104,21 @@ describe("attack sound player", () => {
     }
   });
 
+  it("swallows audio construction exceptions and does not retry after preload was attempted", () => {
+    const configuredSoundCount = Object.values(ATTACK_SOUND_GROUPS).flat().length;
+    let createAudioCalls = 0;
+    const player = createAttackSoundPlayer({
+      createAudio: () => {
+        createAudioCalls += 1;
+        throw new Error("audio construction failed");
+      },
+    });
+
+    expect(() => player.preloadAttackSounds()).not.toThrow();
+    expect(() => player.preloadAttackSounds()).not.toThrow();
+    expect(createAudioCalls).toBe(configuredSoundCount);
+  });
+
   it("cycles variants deterministically and applies configured volume to played clones", () => {
     const { played, createAudio } = createMockAudioFactory();
     const player = createAttackSoundPlayer({ createAudio, volume: 0.25 });

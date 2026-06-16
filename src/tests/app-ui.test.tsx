@@ -140,6 +140,36 @@ describe("App UI", () => {
     expect(playSuccessChime).toHaveBeenCalledTimes(1);
   });
 
+  it("does not replay a success chime for an interleaved duplicate ideal event press", () => {
+    const now = vi.spyOn(performance, "now");
+    const preset = getRotationPreset("one-one");
+    const ideal = expandRotationPattern(preset);
+    const overlappingAuto = ideal.find((event) => {
+      return (
+        event.ability === "autoShot" &&
+        ideal.some((entry) => entry.index !== event.index && entry.ability === "steadyShot" && entry.idealAtMs === event.idealAtMs)
+      );
+    });
+
+    if (!overlappingAuto) {
+      throw new Error("Expected one-one to include overlapping Auto Shot and Steady Shot events");
+    }
+
+    now.mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText("Rotation"), { target: { value: "one-one" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    now.mockReturnValue(overlappingAuto.idealAtMs);
+    fireEvent.keyDown(document, { code: "KeyV" });
+    fireEvent.keyUp(document, { code: "KeyV" });
+    fireEvent.keyDown(document, { code: "Digit4" });
+    fireEvent.keyUp(document, { code: "Digit4" });
+    fireEvent.keyDown(document, { code: "KeyV" });
+
+    expect(playSuccessChime).toHaveBeenCalledTimes(2);
+  });
+
   it("updates movement from live input before enforcing ranged minimum range", () => {
     const now = vi.spyOn(performance, "now");
     now.mockReturnValue(0);

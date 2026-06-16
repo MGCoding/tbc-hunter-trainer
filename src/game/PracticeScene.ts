@@ -397,6 +397,25 @@ export function getTimelineEventY(layout: TimelineRailLayout, ideal: IdealEvent[
   return layout.top + layout.iconSize / 2 + progress * travelHeight;
 }
 
+export function getTimelineEventX(layout: TimelineRailLayout, ideal: IdealEvent[], event: IdealEvent): number {
+  const centerX = layout.left + layout.width / 2;
+  const visibleIdeal = ideal.slice(0, layout.visibleEvents);
+  const sameTimeEvents = visibleIdeal.filter((entry) => entry.idealAtMs === event.idealAtMs);
+
+  if (sameTimeEvents.length <= 1) {
+    return centerX;
+  }
+
+  const columnIndex = Math.max(
+    0,
+    sameTimeEvents.findIndex((entry) => entry.index === event.index),
+  );
+  const offsetStep = Math.min(12, layout.iconSize * 0.36);
+  const rawX = centerX + (columnIndex - (sameTimeEvents.length - 1) / 2) * offsetStep;
+
+  return clamp(rawX, layout.left + layout.iconSize / 2, layout.left + layout.width - layout.iconSize / 2);
+}
+
 export function getTimelineMarkerY(layout: TimelineRailLayout, ideal: IdealEvent[], elapsedMs: number): number {
   const visibleIdeal = ideal.slice(0, layout.visibleEvents);
   const firstVisibleAtMs = visibleIdeal[0]?.idealAtMs ?? 0;
@@ -736,12 +755,12 @@ export class PracticeScene extends Phaser.Scene {
     this.hud.lineStyle(1, 0xf4f2ed, 0.18);
     this.hud.strokeRoundedRect(layout.left, layout.top - 6, layout.width, layout.height + 12, 8);
 
-    const iconLeft = layout.left + layout.width / 2 - layout.iconSize / 2;
     for (let index = 0; index < Math.min(layout.visibleEvents, views.length); index += 1) {
       const view = views[index];
       const object = this.timelineIcons[index];
+      const centerX = getTimelineEventX(layout, this.ideal, view.event);
+      const iconLeft = centerX - layout.iconSize / 2;
       const y = getTimelineEventY(layout, this.ideal, view.event) - layout.iconSize / 2;
-      const centerX = iconLeft + layout.iconSize / 2;
       const centerY = y + layout.iconSize / 2;
 
       this.hud.fillStyle(0x080b0e, 0.78);

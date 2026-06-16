@@ -16,6 +16,7 @@ import {
   getCastBarDisplay,
   getMeleeBarColor,
   getPracticeGridStep,
+  getTimelineEventX,
   getTimelineEventY,
   getTimelineIconViews,
   getTimelineMarkerY,
@@ -166,6 +167,17 @@ describe("PracticeScene layout", () => {
     const secondGap = getTimelineEventY(rail, ideal, ideal[2]) - getTimelineEventY(rail, ideal, ideal[1]);
 
     expect(firstGap).toBeLessThan(secondGap);
+  });
+
+  it("spreads timeline icons with identical ideal times horizontally", () => {
+    const ideal: IdealEvent[] = [
+      { index: 0, token: "a", ability: "autoShot", idealAtMs: 1000, label: "Auto" },
+      { index: 1, token: "s", ability: "steadyShot", idealAtMs: 1000, label: "Steady" },
+    ];
+    const rail = calculateTimelineRailLayout(900, 800, ideal.length);
+
+    expect(getTimelineEventY(rail, ideal, ideal[0])).toBe(getTimelineEventY(rail, ideal, ideal[1]));
+    expect(getTimelineEventX(rail, ideal, ideal[0])).not.toBe(getTimelineEventX(rail, ideal, ideal[1]));
   });
 
   it("turns the melee bar green only while in melee range", () => {

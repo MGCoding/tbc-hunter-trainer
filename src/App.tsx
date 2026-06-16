@@ -88,7 +88,7 @@ export function App() {
   const movementKeysRef = useRef<MovementKeys>({ ...EMPTY_MOVEMENT_KEYS });
   const movementUpdatedAtMsRef = useRef(0);
   const keybindingsRef = useRef<KeybindingMap>(keybindings);
-  const lastPerfectPressKeyRef = useRef<string | null>(null);
+  const perfectPressKeysRef = useRef<Set<string>>(new Set());
   runningRef.current = running;
   keybindingsRef.current = keybindings;
 
@@ -171,7 +171,7 @@ export function App() {
     positionRef.current = createInitialPosition();
     movementKeysRef.current = { ...EMPTY_MOVEMENT_KEYS };
     movementUpdatedAtMsRef.current = 0;
-    lastPerfectPressKeyRef.current = null;
+    perfectPressKeysRef.current.clear();
     setRunning(false);
     setSelectedPresetId(id);
     setEvents([]);
@@ -193,7 +193,7 @@ export function App() {
     positionRef.current = createInitialPosition();
     movementKeysRef.current = { ...EMPTY_MOVEMENT_KEYS };
     movementUpdatedAtMsRef.current = 0;
-    lastPerfectPressKeyRef.current = null;
+    perfectPressKeysRef.current.clear();
     sessionStartedAtRef.current = performance.now();
     setEvents([]);
     setRunning(true);
@@ -227,8 +227,8 @@ export function App() {
       simulator.pressAbility(action, atMs);
       const newLogEntries = simulator.getLog().slice(logLengthBeforePress);
       const inputWasInvalid = newLogEntries.some((event) => event.type === "invalid-input" && event.atMs === atMs);
-      if (perfectPressKey !== null && !inputWasInvalid && lastPerfectPressKeyRef.current !== perfectPressKey) {
-        lastPerfectPressKeyRef.current = perfectPressKey;
+      if (perfectPressKey !== null && !inputWasInvalid && !perfectPressKeysRef.current.has(perfectPressKey)) {
+        perfectPressKeysRef.current.add(perfectPressKey);
         playSuccessChime();
       }
       setEvents(simulator.getLog());

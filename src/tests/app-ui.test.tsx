@@ -14,6 +14,7 @@ vi.mock("../audio/successChime", () => ({
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("App UI", () => {
@@ -214,6 +215,16 @@ describe("App UI", () => {
     fireEvent.keyDown(document, { code: "KeyQ" });
     expect(screen.getByText("ability-press")).toBeInTheDocument();
     expect(screen.getAllByText("arcaneShot").length).toBeGreaterThan(0);
+  });
+});
+
+describe("success chime", () => {
+  it("does not throw when called outside a browser window", async () => {
+    const actual = await vi.importActual<typeof import("../audio/successChime")>("../audio/successChime");
+
+    vi.stubGlobal("window", undefined);
+
+    expect(() => actual.playSuccessChime()).not.toThrow();
   });
 });
 

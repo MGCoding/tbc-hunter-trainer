@@ -5,16 +5,22 @@ declare global {
 }
 
 export function playSuccessChime(): void {
-  const AudioContextConstructor = window.AudioContext ?? window.webkitAudioContext;
-  if (!AudioContextConstructor) {
+  if (typeof window === "undefined") {
     return;
   }
 
+  let context: AudioContext | null = null;
   try {
-    const context = new AudioContextConstructor();
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    const now = context.currentTime;
+    const AudioContextConstructor = window.AudioContext ?? window.webkitAudioContext;
+    if (!AudioContextConstructor) {
+      return;
+    }
+
+    context = new AudioContextConstructor();
+    const audioContext = context;
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    const now = audioContext.currentTime;
 
     oscillator.type = "sine";
     oscillator.frequency.setValueAtTime(880, now);
@@ -24,13 +30,20 @@ export function playSuccessChime(): void {
     gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
 
     oscillator.connect(gain);
-    gain.connect(context.destination);
+    gain.connect(audioContext.destination);
     oscillator.start(now);
     oscillator.stop(now + 0.18);
     oscillator.addEventListener("ended", () => {
-      void context.close();
+      void audioContext.close().catch(() => undefined);
     });
   } catch {
+    if (context !== null) {
+      try {
+        void context.close().catch(() => undefined);
+      } catch {
+        // Closing a partially initialized context is best effort.
+      }
+    }
     // Blocked audio should never interrupt practice.
   }
 }

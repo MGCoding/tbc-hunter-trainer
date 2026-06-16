@@ -96,6 +96,40 @@ describe("App UI", () => {
     expect(playAttackSoundsForEvents).toHaveBeenCalledTimes(callCountAfterStop);
   });
 
+  it("forwards sorted-inserted auto events without replaying already processed ability events", () => {
+    const now = vi.spyOn(performance, "now");
+    const preset = getRotationPreset("french-weaving-5511-3w");
+    const expectedAutoFireAtMs = preset.targetRangedSwingMs;
+    const expectedAutoWindupAtMs = expectedAutoFireAtMs - TIMING.autoWindupMs / preset.hasteFactor;
+
+    now.mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
+    vi.mocked(playAttackSoundsForEvents).mockClear();
+
+    now.mockReturnValue(1_800);
+    fireEvent.keyDown(document, { code: "Digit4" });
+
+    const abilityEvents = vi.mocked(playAttackSoundsForEvents).mock.calls.flatMap(([events]) => events);
+    expect(abilityEvents).toContainEqual({ type: "ability-press", atMs: 1800, ability: "steadyShot" });
+
+    vi.mocked(playAttackSoundsForEvents).mockClear();
+    now.mockReturnValue(2_600);
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+
+    const forwardedEvents = vi.mocked(playAttackSoundsForEvents).mock.calls.flatMap(([events]) => events);
+
+    expect(forwardedEvents).toContainEqual({
+      type: "auto-windup",
+      atMs: expectedAutoWindupAtMs,
+      ability: "autoShot",
+    });
+    expect(forwardedEvents).toContainEqual({ type: "auto-fire", atMs: expectedAutoFireAtMs, ability: "autoShot" });
+    expect(forwardedEvents).not.toContainEqual({ type: "ability-press", atMs: 1800, ability: "steadyShot" });
+  });
+
   it("toggles running status and start stop disabled states", () => {
     render(<App />);
 

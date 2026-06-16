@@ -90,7 +90,7 @@ export function App() {
   const movementUpdatedAtMsRef = useRef(0);
   const keybindingsRef = useRef<KeybindingMap>(keybindings);
   const lastPerfectPressKeyRef = useRef<string | null>(null);
-  const attackSoundEventCursorRef = useRef(0);
+  const processedAttackSoundEventsRef = useRef<Map<string, number>>(new Map());
   runningRef.current = running;
   keybindingsRef.current = keybindings;
 
@@ -145,10 +145,31 @@ export function App() {
     return { elapsedMs, range };
   }
 
+  function getAttackSoundEventSignature(event: SimEvent): string {
+    return JSON.stringify([event.type, event.atMs, event.ability ?? null, event.reason ?? null, event.detail ?? null]);
+  }
+
+  function resetProcessedAttackSoundEvents(): void {
+    processedAttackSoundEventsRef.current = new Map();
+  }
+
   function playNewAttackSoundEvents(): void {
     const log = getSimulator().getLog();
-    const newEvents = log.slice(attackSoundEventCursorRef.current);
-    attackSoundEventCursorRef.current = log.length;
+    const processedEvents = processedAttackSoundEventsRef.current;
+    const scannedEvents = new Map<string, number>();
+    const newEvents: SimEvent[] = [];
+
+    for (const event of log) {
+      const signature = getAttackSoundEventSignature(event);
+      const occurrenceCount = (scannedEvents.get(signature) ?? 0) + 1;
+      scannedEvents.set(signature, occurrenceCount);
+
+      if (occurrenceCount > (processedEvents.get(signature) ?? 0)) {
+        newEvents.push(event);
+      }
+    }
+
+    processedAttackSoundEventsRef.current = scannedEvents;
 
     if (newEvents.length > 0) {
       playAttackSoundsForEvents(newEvents);
@@ -185,7 +206,7 @@ export function App() {
 
   function handlePresetChange(id: string): void {
     simulatorRef.current = createSimulator(getRotationPreset(id));
-    attackSoundEventCursorRef.current = 0;
+    resetProcessedAttackSoundEvents();
     positionRef.current = createInitialPosition();
     movementKeysRef.current = { ...EMPTY_MOVEMENT_KEYS };
     movementUpdatedAtMsRef.current = 0;
@@ -209,7 +230,7 @@ export function App() {
 
   function handleStart(): void {
     simulatorRef.current = createSimulator(preset);
-    attackSoundEventCursorRef.current = 0;
+    resetProcessedAttackSoundEvents();
     positionRef.current = createInitialPosition();
     movementKeysRef.current = { ...EMPTY_MOVEMENT_KEYS };
     movementUpdatedAtMsRef.current = 0;
@@ -264,10 +285,10 @@ export function App() {
       syncLiveStateToNow(nowMs);
       playNewAttackSoundEvents();
       clearSimulatorLogAtSessionNow(getSimulator(), nowMs, sessionStartedAtRef.current);
-      attackSoundEventCursorRef.current = 0;
+      resetProcessedAttackSoundEvents();
     } else {
       getSimulator().resetLog();
-      attackSoundEventCursorRef.current = 0;
+      resetProcessedAttackSoundEvents();
     }
 
     setEvents([]);

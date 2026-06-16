@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DEFAULT_KEYBINDS } from "./data/constants";
+import { playAttackSoundsForEvents, preloadAttackSounds } from "./audio/attackSounds";
 import { playSuccessChime } from "./audio/successChime";
 import { getRotationPreset } from "./data/rotations";
 import { PhaserHost } from "./game/PhaserHost";
@@ -89,6 +90,7 @@ export function App() {
   const movementUpdatedAtMsRef = useRef(0);
   const keybindingsRef = useRef<KeybindingMap>(keybindings);
   const lastPerfectPressKeyRef = useRef<string | null>(null);
+  const attackSoundEventCursorRef = useRef(0);
   runningRef.current = running;
   keybindingsRef.current = keybindings;
 
@@ -143,6 +145,20 @@ export function App() {
     return { elapsedMs, range };
   }
 
+  function playNewAttackSoundEvents(): void {
+    const log = getSimulator().getLog();
+    const newEvents = log.slice(attackSoundEventCursorRef.current);
+    attackSoundEventCursorRef.current = log.length;
+
+    if (newEvents.length > 0) {
+      playAttackSoundsForEvents(newEvents);
+    }
+  }
+
+  useEffect(() => {
+    preloadAttackSounds();
+  }, []);
+
   const getPracticeState = useCallback((): PracticeState => {
     const nowMs = performance.now();
     const { range } = syncLiveStateToNow(nowMs);
@@ -153,6 +169,7 @@ export function App() {
       nowMs,
       sessionStartedAtRef.current,
     );
+    playNewAttackSoundEvents();
 
     return {
       simulator: simulatorState,
@@ -168,6 +185,7 @@ export function App() {
 
   function handlePresetChange(id: string): void {
     simulatorRef.current = createSimulator(getRotationPreset(id));
+    attackSoundEventCursorRef.current = 0;
     positionRef.current = createInitialPosition();
     movementKeysRef.current = { ...EMPTY_MOVEMENT_KEYS };
     movementUpdatedAtMsRef.current = 0;
@@ -182,6 +200,7 @@ export function App() {
       const nowMs = performance.now();
       syncLiveStateToNow(nowMs);
       tickSimulatorToSessionNow(getSimulator(), nowMs, sessionStartedAtRef.current);
+      playNewAttackSoundEvents();
     }
 
     setRunning(false);
@@ -190,6 +209,7 @@ export function App() {
 
   function handleStart(): void {
     simulatorRef.current = createSimulator(preset);
+    attackSoundEventCursorRef.current = 0;
     positionRef.current = createInitialPosition();
     movementKeysRef.current = { ...EMPTY_MOVEMENT_KEYS };
     movementUpdatedAtMsRef.current = 0;
@@ -217,6 +237,7 @@ export function App() {
       const timing = getAbilityTiming(action, preset);
       if ((timing.requiresMelee && !range.canMelee) || (timing.requiresRanged && !range.canUseRanged)) {
         simulator.recordInvalidInput(action, atMs, "out-of-range");
+        playNewAttackSoundEvents();
         setEvents(simulator.getLog());
         return;
       }
@@ -231,6 +252,7 @@ export function App() {
         lastPerfectPressKeyRef.current = perfectPressKey;
         playSuccessChime();
       }
+      playNewAttackSoundEvents();
       setEvents(simulator.getLog());
     },
     [ideal, preset],
@@ -240,9 +262,12 @@ export function App() {
     if (running) {
       const nowMs = performance.now();
       syncLiveStateToNow(nowMs);
+      playNewAttackSoundEvents();
       clearSimulatorLogAtSessionNow(getSimulator(), nowMs, sessionStartedAtRef.current);
+      attackSoundEventCursorRef.current = 0;
     } else {
       getSimulator().resetLog();
+      attackSoundEventCursorRef.current = 0;
     }
 
     setEvents([]);

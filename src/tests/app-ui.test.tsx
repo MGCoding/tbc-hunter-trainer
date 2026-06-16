@@ -70,6 +70,10 @@ describe("App UI", () => {
     fireEvent.change(rotationSelect, { target: { value: "half-weave-22-1w" } });
 
     expect(rotationSelect).toHaveValue("half-weave-22-1w");
+    expect(screen.getByTestId("phaser-host")).toHaveAttribute(
+      "data-ideal-count",
+      String(expandRotationPattern(getRotationPreset("half-weave-22-1w")).length),
+    );
   });
 
   it("keeps mapped ability input live after side-panel focus changes", () => {

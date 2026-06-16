@@ -3,11 +3,12 @@ import type { Game as PhaserGame, Types as PhaserTypes } from "phaser";
 
 import { attachBrowserInput } from "../input/browserInput";
 import type { KeybindingMap } from "../input/keybindings";
-import type { AbilityActionId, MovementKeys } from "../sim/types";
+import type { AbilityActionId, IdealEvent, MovementKeys } from "../sim/types";
 import type { PracticeState, RotationPreset } from "../sim/types";
 
 interface PhaserHostProps {
   preset: RotationPreset;
+  ideal: IdealEvent[];
   getPracticeState: () => PracticeState;
   getKeybindings: () => KeybindingMap;
   onMovementChange: (keys: MovementKeys) => void;
@@ -16,6 +17,7 @@ interface PhaserHostProps {
 
 export function PhaserHost({
   preset,
+  ideal,
   getPracticeState,
   getKeybindings,
   onMovementChange,
@@ -68,7 +70,7 @@ export function PhaserHost({
 
       const game = new Phaser.Game(config);
       gameRef.current = game;
-      game.scene.add("PracticeScene", PracticeScene, true, { preset, getPracticeState, getKeybindings });
+      game.scene.add("PracticeScene", PracticeScene, true, { preset, ideal, getPracticeState, getKeybindings });
     }
 
     void createGame();
@@ -78,7 +80,7 @@ export function PhaserHost({
       gameRef.current?.destroy(true);
       gameRef.current = null;
     };
-  }, [preset, getPracticeState]);
+  }, [preset, ideal, getPracticeState]);
 
-  return <div ref={parentRef} className="phaser-host" data-testid="phaser-host" tabIndex={0} />;
+  return <div ref={parentRef} className="phaser-host" data-testid="phaser-host" data-ideal-count={ideal.length} tabIndex={0} />;
 }

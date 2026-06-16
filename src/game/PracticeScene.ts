@@ -6,6 +6,7 @@ import type {
   AbilityActionId,
   AbilityId,
   ActiveCast,
+  IdealEvent,
   PracticePosition,
   PracticeState,
   RangeState,
@@ -15,6 +16,7 @@ import type {
 
 export interface PracticeSceneData {
   preset: RotationPreset;
+  ideal: IdealEvent[];
   getPracticeState: () => PracticeState;
   getKeybindings: () => KeybindingMap;
 }
@@ -270,6 +272,7 @@ export function canDrawPracticeField(width: number, height: number, layout: Pick
 
 export class PracticeScene extends Phaser.Scene {
   private preset!: RotationPreset;
+  private ideal!: IdealEvent[];
   private getPracticeState!: () => PracticeState;
   private getKeybindings!: () => KeybindingMap;
   private field!: Phaser.GameObjects.Graphics;
@@ -284,6 +287,7 @@ export class PracticeScene extends Phaser.Scene {
 
   init(data: PracticeSceneData): void {
     this.preset = data.preset;
+    this.ideal = data.ideal;
     this.getPracticeState = data.getPracticeState;
     this.getKeybindings = data.getKeybindings;
   }

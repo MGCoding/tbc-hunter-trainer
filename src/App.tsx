@@ -288,6 +288,7 @@ export function App() {
       <section className="practice-stage" aria-label="Practice field">
         <PhaserHost
           preset={preset}
+          ideal={ideal}
           getPracticeState={getPracticeState}
           getKeybindings={getKeybindings}
           onMovementChange={handleMovementChange}

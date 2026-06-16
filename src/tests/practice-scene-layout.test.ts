@@ -16,11 +16,14 @@ import {
   getCastBarDisplay,
   getMeleeBarColor,
   getPracticeGridStep,
+  getTimelineEventY,
   getTimelineIconViews,
+  getTimelineMarkerY,
   WOWHEAD_ICON_BASE_URL,
 } from "../game/PracticeScene";
 import { DEFAULT_KEYBINDS } from "../data/constants";
 import { getRotationPreset } from "../data/rotations";
+import { expandRotationPattern, getRotationPatternDurationMs } from "../sim/timeline";
 import type { IdealEvent, SimulatorState } from "../sim/types";
 
 function expectTargetAndHudVisible(width: number, height: number, margin: number): void {
@@ -140,6 +143,29 @@ describe("PracticeScene layout", () => {
       usesNeutralMeleeTint: true,
     });
     expect(views[0].iconKey).toBe("ability-icon-autoShot");
+  });
+
+  it("maps live session time to a looping timeline marker y position", () => {
+    const ideal = expandRotationPattern(getRotationPreset("one-one"));
+    const rail = calculateTimelineRailLayout(900, 800, ideal.length);
+    const firstEvent = ideal[0];
+    const firstEventY = rail.top + rail.iconSize / 2;
+
+    expect(getTimelineMarkerY(rail, ideal, firstEvent.idealAtMs)).toBeCloseTo(firstEventY);
+    expect(getTimelineMarkerY(rail, ideal, getRotationPatternDurationMs(ideal) + firstEvent.idealAtMs)).toBeCloseTo(firstEventY);
+  });
+
+  it("positions timeline icons by ideal event time rather than equal index spacing", () => {
+    const ideal: IdealEvent[] = [
+      { index: 0, token: "a", ability: "autoShot", idealAtMs: 1000, label: "Auto" },
+      { index: 1, token: "s", ability: "steadyShot", idealAtMs: 1200, label: "Steady" },
+      { index: 2, token: "m", ability: "multiShot", idealAtMs: 5000, label: "Multi" },
+    ];
+    const rail = calculateTimelineRailLayout(900, 800, ideal.length);
+    const firstGap = getTimelineEventY(rail, ideal, ideal[1]) - getTimelineEventY(rail, ideal, ideal[0]);
+    const secondGap = getTimelineEventY(rail, ideal, ideal[2]) - getTimelineEventY(rail, ideal, ideal[1]);
+
+    expect(firstGap).toBeLessThan(secondGap);
   });
 
   it("turns the melee bar green only while in melee range", () => {

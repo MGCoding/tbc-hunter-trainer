@@ -2,6 +2,7 @@ import Phaser from "phaser";
 
 import { MOVEMENT, TIMING } from "../data/constants";
 import { formatKeyBinding, type KeybindingMap } from "../input/keybindings";
+import { getLoopedTimelinePosition, getRotationPatternDurationMs } from "../sim/timeline";
 import type {
   AbilityActionId,
   AbilityId,
@@ -99,6 +100,10 @@ interface AbilityIconObject {
   image: Phaser.GameObjects.Image;
   hotkeyText: Phaser.GameObjects.Text;
   cooldownText: Phaser.GameObjects.Text;
+}
+
+interface TimelineIconObject {
+  image: Phaser.GameObjects.Image;
 }
 
 export interface AbilityIconView {
@@ -381,6 +386,30 @@ export function calculateTimelineRailLayout(width: number, height: number, event
   };
 }
 
+export function getTimelineEventY(layout: TimelineRailLayout, ideal: IdealEvent[], event: IdealEvent): number {
+  const visibleIdeal = ideal.slice(0, layout.visibleEvents);
+  const firstVisibleAtMs = visibleIdeal[0]?.idealAtMs ?? 0;
+  const lastVisibleAtMs = visibleIdeal.at(-1)?.idealAtMs ?? firstVisibleAtMs;
+  const visibleDurationMs = Math.max(1, lastVisibleAtMs - firstVisibleAtMs);
+  const progress = clamp01((event.idealAtMs - firstVisibleAtMs) / visibleDurationMs);
+  const travelHeight = Math.max(0, layout.height - layout.iconSize);
+
+  return layout.top + layout.iconSize / 2 + progress * travelHeight;
+}
+
+export function getTimelineMarkerY(layout: TimelineRailLayout, ideal: IdealEvent[], elapsedMs: number): number {
+  const visibleIdeal = ideal.slice(0, layout.visibleEvents);
+  const firstVisibleAtMs = visibleIdeal[0]?.idealAtMs ?? 0;
+  const lastVisibleAtMs = visibleIdeal.at(-1)?.idealAtMs ?? firstVisibleAtMs;
+  const visibleDurationMs = Math.max(1, lastVisibleAtMs - firstVisibleAtMs);
+  const position = getLoopedTimelinePosition(ideal, elapsedMs);
+  const visibleElapsedMs = clamp(position.loopElapsedMs, firstVisibleAtMs, lastVisibleAtMs);
+  const progress = clamp01((visibleElapsedMs - firstVisibleAtMs) / visibleDurationMs);
+  const travelHeight = Math.max(0, layout.height - layout.iconSize);
+
+  return layout.top + layout.iconSize / 2 + progress * travelHeight;
+}
+
 export function getPracticeGridStep(layout: Pick<PracticeLayout, "yardPx">): number {
   return GRID_YARDS * layout.yardPx;
 }
@@ -399,6 +428,7 @@ export class PracticeScene extends Phaser.Scene {
   private castLabel!: Phaser.GameObjects.Text;
   private distanceLabel!: Phaser.GameObjects.Text;
   private abilityIcons: AbilityIconObject[] = [];
+  private timelineIcons: TimelineIconObject[] = [];
 
   constructor() {
     super("PracticeScene");
@@ -412,20 +442,30 @@ export class PracticeScene extends Phaser.Scene {
   }
 
   preload(): void {
-    for (const view of getAbilityIconViews(
-      {
-        nowMs: 0,
-        gcdReadyAtMs: 0,
-        nextAutoAtMs: this.preset.targetRangedSwingMs,
-        nextMeleeAtMs: this.preset.derivedMeleeSwingMs,
-        raptorReadyAtMs: 0,
-        activeCast: null,
-        queuedAbility: null,
-        autoPaused: false,
-      },
-      this.preset,
-      this.getKeybindings(),
-    )) {
+    const iconViews = [
+      ...getAbilityIconViews(
+        {
+          nowMs: 0,
+          gcdReadyAtMs: 0,
+          nextAutoAtMs: this.preset.targetRangedSwingMs,
+          nextMeleeAtMs: this.preset.derivedMeleeSwingMs,
+          raptorReadyAtMs: 0,
+          activeCast: null,
+          queuedAbility: null,
+          autoPaused: false,
+        },
+        this.preset,
+        this.getKeybindings(),
+      ),
+      ...getTimelineIconViews(this.ideal),
+    ];
+    const queuedIconKeys = new Set<string>();
+    for (const view of iconViews) {
+      if (queuedIconKeys.has(view.iconKey) || this.textures.exists(view.iconKey)) {
+        continue;
+      }
+
+      queuedIconKeys.add(view.iconKey);
       this.load.image(view.iconKey, view.iconUrl);
     }
   }
@@ -481,6 +521,9 @@ export class PracticeScene extends Phaser.Scene {
 
       return { image, hotkeyText, cooldownText };
     });
+    this.timelineIcons = this.ideal.map(() => ({
+      image: this.add.image(0, 0, "").setScrollFactor(0),
+    }));
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
@@ -600,6 +643,7 @@ export class PracticeScene extends Phaser.Scene {
     this.drawBar(hud.left, rangedTop, hud.width, hud.barHeight, rangedProgress, 0x7e9dbc, 0.92);
     this.drawRangedSparks(hud.left, rangedTop, hud.width, hud.barHeight, state);
     this.drawAbilityIcons(hud, getAbilityIconViews(state, this.preset, this.getKeybindings()));
+    this.drawTimelineRail(state);
   }
 
   private drawBar(x: number, y: number, width: number, height: number, progress: number, color: number, alpha: number): void {
@@ -672,5 +716,52 @@ export class PracticeScene extends Phaser.Scene {
       object.cooldownText.setPosition(centerX, centerY);
       object.cooldownText.setFontSize(hud.iconSize < 32 ? 11 : 13);
     }
+  }
+
+  private drawTimelineRail(state: SimulatorState): void {
+    const camera = this.cameras.main;
+    const views = getTimelineIconViews(this.ideal);
+    const layout = calculateTimelineRailLayout(camera.width, camera.height, views.length);
+
+    for (let index = 0; index < this.timelineIcons.length; index += 1) {
+      this.timelineIcons[index].image.setVisible(false);
+    }
+
+    if (!layout.visible || views.length === 0 || getRotationPatternDurationMs(this.ideal) <= 0) {
+      return;
+    }
+
+    this.hud.fillStyle(0x080b0e, 0.62);
+    this.hud.fillRoundedRect(layout.left, layout.top - 6, layout.width, layout.height + 12, 8);
+    this.hud.lineStyle(1, 0xf4f2ed, 0.18);
+    this.hud.strokeRoundedRect(layout.left, layout.top - 6, layout.width, layout.height + 12, 8);
+
+    const iconLeft = layout.left + layout.width / 2 - layout.iconSize / 2;
+    for (let index = 0; index < Math.min(layout.visibleEvents, views.length); index += 1) {
+      const view = views[index];
+      const object = this.timelineIcons[index];
+      const y = getTimelineEventY(layout, this.ideal, view.event) - layout.iconSize / 2;
+      const centerX = iconLeft + layout.iconSize / 2;
+      const centerY = y + layout.iconSize / 2;
+
+      this.hud.fillStyle(0x080b0e, 0.78);
+      this.hud.fillRoundedRect(iconLeft, y, layout.iconSize, layout.iconSize, 5);
+      this.hud.lineStyle(1, view.usesNeutralMeleeTint ? 0xc9d3d8 : 0xf5df9f, view.usesNeutralMeleeTint ? 0.46 : 0.32);
+      this.hud.strokeRoundedRect(iconLeft, y, layout.iconSize, layout.iconSize, 5);
+
+      object.image.setVisible(true);
+      object.image.setTexture(view.iconKey);
+      object.image.setPosition(centerX, centerY);
+      object.image.setDisplaySize(layout.iconSize - 4, layout.iconSize - 4);
+      object.image.setAlpha(view.usesNeutralMeleeTint ? 0.72 : 0.96);
+      object.image.setTint(view.usesNeutralMeleeTint ? 0xd8dde2 : 0xffffff);
+    }
+
+    const markerY = getTimelineMarkerY(layout, this.ideal, state.nowMs);
+    this.hud.lineStyle(3, 0xd7a84a, 0.96);
+    this.hud.lineBetween(layout.left - 5, markerY, layout.left + layout.markerWidth - 5, markerY);
+    this.hud.lineStyle(1, 0xf5df9f, 0.55);
+    this.hud.lineBetween(layout.left - 5, markerY - 3, layout.left + layout.markerWidth - 5, markerY - 3);
+    this.hud.lineBetween(layout.left - 5, markerY + 3, layout.left + layout.markerWidth - 5, markerY + 3);
   }
 }

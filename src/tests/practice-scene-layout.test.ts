@@ -38,6 +38,18 @@ function expectMaxRangedRingVisible(width: number, height: number, margin: numbe
 }
 
 describe("PracticeScene layout", () => {
+  const hiddenTimelineRailLayout = {
+    visible: false,
+    top: 0,
+    left: 0,
+    width: 0,
+    height: 0,
+    iconSize: 0,
+    iconGap: 0,
+    markerWidth: 0,
+    visibleEvents: 0,
+  };
+
   it("keeps the target and HUD stack visible on mobile portrait surfaces", () => {
     expectTargetAndHudVisible(390, 439, 8);
     expectMaxRangedRingVisible(390, 439, 8);
@@ -98,6 +110,18 @@ describe("PracticeScene layout", () => {
 
   it("hides the timeline rail when there are no ideal events", () => {
     expect(calculateTimelineRailLayout(900, 800, 0).visible).toBe(false);
+  });
+
+  it("hides the timeline rail with a zeroed layout for non-finite dimensions", () => {
+    expect(calculateTimelineRailLayout(Number.NaN, 800, 12)).toEqual(hiddenTimelineRailLayout);
+  });
+
+  it("hides the timeline rail with a zeroed layout when the viewport is too narrow", () => {
+    expect(calculateTimelineRailLayout(50, 800, 12)).toEqual(hiddenTimelineRailLayout);
+  });
+
+  it("hides the timeline rail with a zeroed layout when the viewport is too short", () => {
+    expect(calculateTimelineRailLayout(900, 10, 12)).toEqual(hiddenTimelineRailLayout);
   });
 
   it("builds timeline icon views for Auto, spell, Raptor, and white melee events", () => {

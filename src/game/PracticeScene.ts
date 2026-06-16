@@ -314,19 +314,35 @@ export function getTimelineIconViews(ideal: IdealEvent[]): TimelineIconView[] {
   });
 }
 
+function getHiddenTimelineRailLayout(): TimelineRailLayout {
+  return {
+    visible: false,
+    top: 0,
+    left: 0,
+    width: 0,
+    height: 0,
+    iconSize: 0,
+    iconGap: 0,
+    markerWidth: 0,
+    visibleEvents: 0,
+  };
+}
+
 export function calculateTimelineRailLayout(width: number, height: number, eventCount: number): TimelineRailLayout {
-  if (width <= 0 || height <= 0 || eventCount <= 0) {
-    return {
-      visible: false,
-      top: 0,
-      left: 0,
-      width: 0,
-      height: 0,
-      iconSize: 0,
-      iconGap: 0,
-      markerWidth: 0,
-      visibleEvents: 0,
-    };
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    !Number.isFinite(eventCount) ||
+    width <= 0 ||
+    height <= 0 ||
+    !Number.isInteger(eventCount) ||
+    eventCount <= 0
+  ) {
+    return getHiddenTimelineRailLayout();
+  }
+
+  if (width < TIMELINE_RAIL_WIDTH + 2 * TIMELINE_RAIL_MARGIN) {
+    return getHiddenTimelineRailLayout();
   }
 
   const practiceLayout = calculatePracticeLayout(width, height);
@@ -335,6 +351,10 @@ export function calculateTimelineRailLayout(width: number, height: number, event
   const fallbackBottom = height - TIMELINE_RAIL_MARGIN;
   const bottom = preferredBottom - top >= 96 ? preferredBottom : fallbackBottom;
   const availableHeight = Math.max(0, bottom - top);
+  if (availableHeight < TIMELINE_ICON_MIN_SIZE) {
+    return getHiddenTimelineRailLayout();
+  }
+
   const idealGapTotal = Math.max(0, eventCount - 1) * TIMELINE_ICON_MIN_GAP;
   const fittedIconSize = Math.floor((availableHeight - idealGapTotal) / eventCount);
   const iconSize = clamp(fittedIconSize, TIMELINE_ICON_MIN_SIZE, TIMELINE_ICON_MAX_SIZE);
@@ -349,7 +369,7 @@ export function calculateTimelineRailLayout(width: number, height: number, event
   const railHeight = visibleEvents * iconSize + Math.max(0, visibleEvents - 1) * iconGap;
 
   return {
-    visible: availableHeight >= TIMELINE_ICON_MIN_SIZE,
+    visible: true,
     top,
     left: width - TIMELINE_RAIL_MARGIN - TIMELINE_RAIL_WIDTH,
     width: TIMELINE_RAIL_WIDTH,

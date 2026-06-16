@@ -2,8 +2,15 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
+import { playSuccessChime } from "../audio/successChime";
+import { getRotationPreset } from "../data/rotations";
+import { expandRotationPattern } from "../sim/timeline";
 import type { SimEvent } from "../sim/types";
 import { EventLogPanel } from "../ui/EventLogPanel";
+
+vi.mock("../audio/successChime", () => ({
+  playSuccessChime: vi.fn(),
+}));
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -73,6 +80,59 @@ describe("App UI", () => {
 
     expect(screen.getByText("ability-press")).toBeInTheDocument();
     expect(screen.getAllByText("steadyShot").length).toBeGreaterThan(0);
+  });
+
+  it("plays a success chime for a correctly timed expected ability input", () => {
+    const now = vi.spyOn(performance, "now");
+    const preset = getRotationPreset("french-weaving-5511-3w");
+    const ideal = expandRotationPattern(preset);
+    const steady = ideal.find((event) => event.ability === "steadyShot")!;
+
+    now.mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    now.mockReturnValue(steady.idealAtMs + 75);
+    fireEvent.keyDown(document, { code: "Digit4" });
+
+    expect(playSuccessChime).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not play a success chime for wrong or late ability input", () => {
+    const now = vi.spyOn(performance, "now");
+    const preset = getRotationPreset("french-weaving-5511-3w");
+    const ideal = expandRotationPattern(preset);
+    const steady = ideal.find((event) => event.ability === "steadyShot")!;
+
+    now.mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    now.mockReturnValue(steady.idealAtMs);
+    fireEvent.keyDown(document, { code: "Digit1" });
+    now.mockReturnValue(steady.idealAtMs + 250);
+    fireEvent.keyDown(document, { code: "Digit4" });
+
+    expect(playSuccessChime).not.toHaveBeenCalled();
+  });
+
+  it("plays only one success chime for repeated presses inside the same ideal event window", () => {
+    const now = vi.spyOn(performance, "now");
+    const preset = getRotationPreset("french-weaving-5511-3w");
+    const ideal = expandRotationPattern(preset);
+    const steady = ideal.find((event) => event.ability === "steadyShot")!;
+
+    now.mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    now.mockReturnValue(steady.idealAtMs);
+    fireEvent.keyDown(document, { code: "Digit4" });
+    fireEvent.keyUp(document, { code: "Digit4" });
+    now.mockReturnValue(steady.idealAtMs + 20);
+    fireEvent.keyDown(document, { code: "Digit4" });
+
+    expect(playSuccessChime).toHaveBeenCalledTimes(1);
   });
 
   it("updates movement from live input before enforcing ranged minimum range", () => {

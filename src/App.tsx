@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DEFAULT_KEYBINDS } from "./data/constants";
+import { playSuccessChime } from "./audio/successChime";
 import { getRotationPreset } from "./data/rotations";
 import { PhaserHost } from "./game/PhaserHost";
 import { getAbilityTiming } from "./sim/abilities";
 import { createInitialPosition, getRangeState, updateMovement } from "./sim/movement";
 import { scoreEvents } from "./sim/scoring";
 import { createSimulator } from "./sim/simulator";
-import { expandRotationPattern } from "./sim/timeline";
+import { describePerfectPressKey, expandRotationPattern, findPerfectPress } from "./sim/timeline";
 import type { Simulator } from "./sim/simulator";
 import type {
   AbilityActionId,
@@ -87,6 +88,7 @@ export function App() {
   const movementKeysRef = useRef<MovementKeys>({ ...EMPTY_MOVEMENT_KEYS });
   const movementUpdatedAtMsRef = useRef(0);
   const keybindingsRef = useRef<KeybindingMap>(keybindings);
+  const lastPerfectPressKeyRef = useRef<string | null>(null);
   runningRef.current = running;
   keybindingsRef.current = keybindings;
 
@@ -169,6 +171,7 @@ export function App() {
     positionRef.current = createInitialPosition();
     movementKeysRef.current = { ...EMPTY_MOVEMENT_KEYS };
     movementUpdatedAtMsRef.current = 0;
+    lastPerfectPressKeyRef.current = null;
     setRunning(false);
     setSelectedPresetId(id);
     setEvents([]);
@@ -190,6 +193,7 @@ export function App() {
     positionRef.current = createInitialPosition();
     movementKeysRef.current = { ...EMPTY_MOVEMENT_KEYS };
     movementUpdatedAtMsRef.current = 0;
+    lastPerfectPressKeyRef.current = null;
     sessionStartedAtRef.current = performance.now();
     setEvents([]);
     setRunning(true);
@@ -217,10 +221,19 @@ export function App() {
         return;
       }
 
+      const perfectPress = findPerfectPress(ideal, action, atMs);
+      const perfectPressKey = perfectPress ? describePerfectPressKey(perfectPress) : null;
+      const logLengthBeforePress = simulator.getLog().length;
       simulator.pressAbility(action, atMs);
+      const newLogEntries = simulator.getLog().slice(logLengthBeforePress);
+      const inputWasInvalid = newLogEntries.some((event) => event.type === "invalid-input" && event.atMs === atMs);
+      if (perfectPressKey !== null && !inputWasInvalid && lastPerfectPressKeyRef.current !== perfectPressKey) {
+        lastPerfectPressKeyRef.current = perfectPressKey;
+        playSuccessChime();
+      }
       setEvents(simulator.getLog());
     },
-    [preset],
+    [ideal, preset],
   );
 
   function handleResetLog(): void {

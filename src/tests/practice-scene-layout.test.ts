@@ -10,16 +10,18 @@ vi.mock("phaser", () => ({
 
 import {
   calculatePracticeLayout,
+  calculateTimelineRailLayout,
   canDrawPracticeField,
   getAbilityIconViews,
   getCastBarDisplay,
   getMeleeBarColor,
   getPracticeGridStep,
+  getTimelineIconViews,
   WOWHEAD_ICON_BASE_URL,
 } from "../game/PracticeScene";
 import { DEFAULT_KEYBINDS } from "../data/constants";
 import { getRotationPreset } from "../data/rotations";
-import type { SimulatorState } from "../sim/types";
+import type { IdealEvent, SimulatorState } from "../sim/types";
 
 function expectTargetAndHudVisible(width: number, height: number, margin: number): void {
   const layout = calculatePracticeLayout(width, height);
@@ -72,6 +74,48 @@ describe("PracticeScene layout", () => {
 
     expect(layout.hud.iconTop).toBeGreaterThan(rangedBottom);
     expect(layout.hud.iconTop + layout.hud.iconSize).toBeLessThanOrEqual(layout.hud.top + layout.hud.totalHeight);
+  });
+
+  it("pins the timeline rail to the right side and above the bottom HUD when space allows", () => {
+    const layout = calculatePracticeLayout(900, 800);
+    const rail = calculateTimelineRailLayout(900, 800, 12);
+
+    expect(rail.visible).toBe(true);
+    expect(rail.left + rail.width).toBeLessThanOrEqual(900 - 12);
+    expect(rail.top).toBeGreaterThanOrEqual(12);
+    expect(rail.top + rail.height).toBeLessThanOrEqual(layout.hud.top - 8);
+    expect(rail.visibleEvents).toBe(12);
+  });
+
+  it("shrinks the timeline rail to show as many events as possible on short fields", () => {
+    const rail = calculateTimelineRailLayout(390, 273, 24);
+
+    expect(rail.visible).toBe(true);
+    expect(rail.iconSize).toBeGreaterThanOrEqual(18);
+    expect(rail.visibleEvents).toBeGreaterThan(0);
+    expect(rail.visibleEvents).toBeLessThanOrEqual(24);
+  });
+
+  it("hides the timeline rail when there are no ideal events", () => {
+    expect(calculateTimelineRailLayout(900, 800, 0).visible).toBe(false);
+  });
+
+  it("builds timeline icon views for Auto, spell, Raptor, and white melee events", () => {
+    const ideal: IdealEvent[] = [
+      { index: 0, token: "a", ability: "autoShot", idealAtMs: 1000, label: "Auto" },
+      { index: 1, token: "s", ability: "steadyShot", idealAtMs: 1500, label: "Steady" },
+      { index: 2, token: "w", ability: "raptorStrike", idealAtMs: 3000, label: "Weave" },
+      { index: 3, token: "w", ability: "meleeSwing", idealAtMs: 6500, label: "Weave" },
+    ];
+
+    const views = getTimelineIconViews(ideal);
+
+    expect(views.map((view) => view.ability)).toEqual(["autoShot", "steadyShot", "raptorStrike", "meleeSwing"]);
+    expect(views[3]).toMatchObject({
+      ability: "meleeSwing",
+      usesNeutralMeleeTint: true,
+    });
+    expect(views[0].iconKey).toBe("ability-icon-autoShot");
   });
 
   it("turns the melee bar green only while in melee range", () => {

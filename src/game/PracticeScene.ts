@@ -32,8 +32,13 @@ const MAX_BAR_WIDTH = 260;
 const ICON_COUNT = 6;
 const MELEE_READY_COLOR = 0x7fd1a8;
 const MELEE_WAITING_COLOR = 0xd9664f;
+const TIMELINE_RAIL_MARGIN = 12;
+const TIMELINE_RAIL_WIDTH = 58;
+const TIMELINE_ICON_MAX_SIZE = 34;
+const TIMELINE_ICON_MIN_SIZE = 18;
+const TIMELINE_ICON_MIN_GAP = 4;
 
-const ABILITY_ICON_DEFS = [
+export const ABILITY_ICON_DEFS = [
   {
     action: "arcaneShot",
     ability: "arcaneShot",
@@ -106,6 +111,26 @@ export interface AbilityIconView {
   cooldownLabel: string;
   cooldownRemainingMs: number;
   isReady: boolean;
+}
+
+export interface TimelineIconView {
+  event: IdealEvent;
+  ability: AbilityId;
+  iconKey: string;
+  iconUrl: string;
+  usesNeutralMeleeTint: boolean;
+}
+
+export interface TimelineRailLayout {
+  visible: boolean;
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+  iconSize: number;
+  iconGap: number;
+  markerWidth: number;
+  visibleEvents: number;
 }
 
 export interface PracticeLayout {
@@ -259,6 +284,80 @@ export function calculatePracticeLayout(width: number, height: number): Practice
       gap,
       totalHeight,
     },
+  };
+}
+
+function getIconDefinitionForAbility(ability: AbilityId): (typeof ABILITY_ICON_DEFS)[number] {
+  if (ability === "meleeSwing") {
+    return ABILITY_ICON_DEFS.find((definition) => definition.ability === "raptorStrike")!;
+  }
+
+  const definition = ABILITY_ICON_DEFS.find((entry) => entry.ability === ability);
+  if (!definition) {
+    return ABILITY_ICON_DEFS.find((entry) => entry.ability === "raptorStrike")!;
+  }
+
+  return definition;
+}
+
+export function getTimelineIconViews(ideal: IdealEvent[]): TimelineIconView[] {
+  return ideal.map((event) => {
+    const definition = getIconDefinitionForAbility(event.ability);
+
+    return {
+      event,
+      ability: event.ability,
+      iconKey: `ability-icon-${definition.action}`,
+      iconUrl: `${WOWHEAD_ICON_BASE_URL}${definition.icon}`,
+      usesNeutralMeleeTint: event.ability === "meleeSwing",
+    };
+  });
+}
+
+export function calculateTimelineRailLayout(width: number, height: number, eventCount: number): TimelineRailLayout {
+  if (width <= 0 || height <= 0 || eventCount <= 0) {
+    return {
+      visible: false,
+      top: 0,
+      left: 0,
+      width: 0,
+      height: 0,
+      iconSize: 0,
+      iconGap: 0,
+      markerWidth: 0,
+      visibleEvents: 0,
+    };
+  }
+
+  const practiceLayout = calculatePracticeLayout(width, height);
+  const top = TIMELINE_RAIL_MARGIN;
+  const preferredBottom = practiceLayout.hud.top - 8;
+  const fallbackBottom = height - TIMELINE_RAIL_MARGIN;
+  const bottom = preferredBottom - top >= 96 ? preferredBottom : fallbackBottom;
+  const availableHeight = Math.max(0, bottom - top);
+  const idealGapTotal = Math.max(0, eventCount - 1) * TIMELINE_ICON_MIN_GAP;
+  const fittedIconSize = Math.floor((availableHeight - idealGapTotal) / eventCount);
+  const iconSize = clamp(fittedIconSize, TIMELINE_ICON_MIN_SIZE, TIMELINE_ICON_MAX_SIZE);
+  const visibleEvents = Math.max(
+    1,
+    Math.min(eventCount, Math.floor((availableHeight + TIMELINE_ICON_MIN_GAP) / (iconSize + TIMELINE_ICON_MIN_GAP))),
+  );
+  const iconGap =
+    visibleEvents > 1
+      ? Math.max(TIMELINE_ICON_MIN_GAP, Math.floor((availableHeight - visibleEvents * iconSize) / (visibleEvents - 1)))
+      : 0;
+  const railHeight = visibleEvents * iconSize + Math.max(0, visibleEvents - 1) * iconGap;
+
+  return {
+    visible: availableHeight >= TIMELINE_ICON_MIN_SIZE,
+    top,
+    left: width - TIMELINE_RAIL_MARGIN - TIMELINE_RAIL_WIDTH,
+    width: TIMELINE_RAIL_WIDTH,
+    height: railHeight,
+    iconSize,
+    iconGap,
+    markerWidth: TIMELINE_RAIL_WIDTH + 10,
+    visibleEvents,
   };
 }
 

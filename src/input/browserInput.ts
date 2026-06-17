@@ -231,9 +231,7 @@ export function attachBrowserInput(
       return;
     }
 
-    if (mouseForward) {
-      event.preventDefault();
-    }
+    event.preventDefault();
   };
 
   target.addEventListener("keydown", handleKeyDown);

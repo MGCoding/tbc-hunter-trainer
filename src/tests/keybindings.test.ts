@@ -147,7 +147,7 @@ describe("browser input adapter", () => {
     cleanup();
   });
 
-  it("allows standalone right-click context menus", () => {
+  it("suppresses standalone right-click context menus", () => {
     const target = new EventTarget();
     const cleanup = attachBrowserInput(target, DEFAULT_KEYBINDS, {
       onMovementChange: vi.fn(),
@@ -157,7 +157,7 @@ describe("browser input adapter", () => {
 
     target.dispatchEvent(contextMenuEvent);
 
-    expect(contextMenuEvent.defaultPrevented).toBe(false);
+    expect(contextMenuEvent.defaultPrevented).toBe(true);
 
     cleanup();
   });

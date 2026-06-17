@@ -114,6 +114,11 @@ describe("App UI", () => {
 
     const abilityEvents = vi.mocked(playAttackSoundsForEvents).mock.calls.flatMap(([events]) => events);
     expect(abilityEvents).toContainEqual({ type: "ability-press", atMs: 1800, ability: "steadyShot" });
+    expect(abilityEvents).toContainEqual({
+      type: "auto-windup",
+      atMs: expectedAutoWindupAtMs,
+      ability: "autoShot",
+    });
 
     vi.mocked(playAttackSoundsForEvents).mockClear();
     now.mockReturnValue(2_600);
@@ -121,7 +126,7 @@ describe("App UI", () => {
 
     const forwardedEvents = vi.mocked(playAttackSoundsForEvents).mock.calls.flatMap(([events]) => events);
 
-    expect(forwardedEvents).toContainEqual({
+    expect(forwardedEvents).not.toContainEqual({
       type: "auto-windup",
       atMs: expectedAutoWindupAtMs,
       ability: "autoShot",

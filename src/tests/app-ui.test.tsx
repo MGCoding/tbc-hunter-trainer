@@ -275,7 +275,7 @@ describe("App UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
     fireEvent.keyDown(document, { code: "KeyW" });
-    now.mockReturnValue(1_000);
+    now.mockReturnValue(100);
     fireEvent.keyUp(document, { code: "KeyW" });
     fireEvent.keyDown(document, { code: "Digit1" });
 
@@ -292,7 +292,7 @@ describe("App UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
     fireEvent.keyDown(document, { code: "KeyW" });
-    now.mockReturnValue(1_000);
+    now.mockReturnValue(100);
     fireEvent.keyUp(document, { code: "KeyW" });
     now.mockReturnValue(6_000);
     fireEvent.click(screen.getByRole("button", { name: "Stop" }));
@@ -308,7 +308,7 @@ describe("App UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
     fireEvent.keyDown(document, { code: "KeyW" });
-    now.mockReturnValue(1_000);
+    now.mockReturnValue(100);
     fireEvent.keyUp(document, { code: "KeyW" });
     now.mockReturnValue(2_600);
     fireEvent.mouseDown(document, { button: 3 });

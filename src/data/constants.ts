@@ -19,7 +19,7 @@ export const MOVEMENT = {
   meleeRangeYards: 2,
   minimumRangedRangeYards: 2,
   maximumRangedRangeYards: 35,
-  startingDistanceYards: 7.8,
+  startingDistanceYards: 2.5,
 } as const;
 
 export const DEFAULT_KEYBINDS: Record<ActionId, KeyBinding> = {

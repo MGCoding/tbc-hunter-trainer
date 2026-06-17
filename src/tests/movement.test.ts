@@ -3,6 +3,12 @@ import { MOVEMENT } from "../data/constants";
 import { createInitialPosition, getRangeState, updateMovement } from "../sim/movement";
 
 describe("movement", () => {
+  it("starts the target 2.5 yards away by default", () => {
+    const start = createInitialPosition();
+
+    expect(getRangeState(start).distanceYards).toBeCloseTo(2.5);
+  });
+
   it("moves forward, backward, and strafe with fixed facing", () => {
     const start = createInitialPosition(MOVEMENT.startingDistanceYards);
     const forward = updateMovement(start, { forward: true, backward: false, left: false, right: false }, 1000);

@@ -23,7 +23,15 @@ import type {
   SimEvent,
   SimulatorState,
 } from "./sim/types";
-import { formatKeyBinding, rebindAction, type KeybindingMap } from "./input/keybindings";
+import {
+  clearStoredKeybindings,
+  createKeybindingMap,
+  formatKeyBinding,
+  loadStoredKeybindings,
+  rebindAction,
+  saveStoredKeybindings,
+  type KeybindingMap,
+} from "./input/keybindings";
 import { ControlPanel } from "./ui/ControlPanel";
 import { EventLogPanel } from "./ui/EventLogPanel";
 import { ReferencePanel } from "./ui/ReferencePanel";
@@ -78,7 +86,7 @@ export function App() {
   const [selectedPresetId, setSelectedPresetId] = useState(DEFAULT_PRESET_ID);
   const [events, setEvents] = useState<SimEvent[]>([]);
   const [running, setRunning] = useState(false);
-  const [keybindings, setKeybindings] = useState<KeybindingMap>(DEFAULT_KEYBINDS);
+  const [keybindings, setKeybindings] = useState<KeybindingMap>(() => loadStoredKeybindings(DEFAULT_KEYBINDS));
   const [captureAction, setCaptureAction] = useState<ActionId | null>(null);
   const [macroKillCommandIntoRaptorStrike, setMacroKillCommandIntoRaptorStrike] = useState(false);
 
@@ -304,7 +312,17 @@ export function App() {
   }
 
   function applyBinding(action: ActionId, binding: KeyBinding): void {
-    setKeybindings((current) => rebindAction(current, action, binding, true));
+    setKeybindings((current) => {
+      const nextBindings = rebindAction(current, action, binding, true);
+      saveStoredKeybindings(nextBindings);
+      return nextBindings;
+    });
+    setCaptureAction(null);
+  }
+
+  function handleResetKeybindings(): void {
+    clearStoredKeybindings();
+    setKeybindings(createKeybindingMap(DEFAULT_KEYBINDS));
     setCaptureAction(null);
   }
 
@@ -364,6 +382,14 @@ export function App() {
             <h2 id="keybindings-panel-title">Keybindings</h2>
             {captureAction ? <span className="status-pill is-running">Listening</span> : null}
           </div>
+          <button
+            type="button"
+            className="secondary-button keybinding-reset-button"
+            aria-label="Reset keybindings to default"
+            onClick={handleResetKeybindings}
+          >
+            Reset to Default
+          </button>
           <label className="checkbox-field">
             <input
               type="checkbox"

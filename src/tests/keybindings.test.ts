@@ -1,8 +1,20 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_KEYBINDS } from "../data/constants";
 import { attachBrowserInput } from "../input/browserInput";
-import { findActionForBinding, formatKeyBinding, rebindAction } from "../input/keybindings";
+import {
+  clearStoredKeybindings,
+  findActionForBinding,
+  formatKeyBinding,
+  loadStoredKeybindings,
+  rebindAction,
+  saveStoredKeybindings,
+} from "../input/keybindings";
 import type { KeyBinding } from "../sim/types";
+
+afterEach(() => {
+  localStorage.clear();
+  vi.restoreAllMocks();
+});
 
 describe("keybindings", () => {
   it("finds keyboard and mouse actions", () => {
@@ -27,6 +39,91 @@ describe("keybindings", () => {
     expect(formatKeyBinding({ kind: "mouse", button: 3 })).toBe("M4");
     expect(formatKeyBinding({ kind: "mouse", button: 3 }, "long")).toBe("Mouse4");
     expect(formatKeyBinding({ kind: "keyboard", code: "" })).toBe("");
+  });
+});
+
+describe("stored keybindings", () => {
+  const storageKey = "melee-weaving-practice.keybindings.v1";
+
+  it("loads defaults when no stored map exists", () => {
+    expect(loadStoredKeybindings(DEFAULT_KEYBINDS)).toEqual(DEFAULT_KEYBINDS);
+  });
+
+  it("saves and loads a complete custom map", () => {
+    const custom = rebindAction(DEFAULT_KEYBINDS, "arcaneShot", { kind: "keyboard", code: "KeyQ" }, true);
+
+    saveStoredKeybindings(custom);
+
+    expect(JSON.parse(localStorage.getItem(storageKey) ?? "null")).toEqual(custom);
+    expect(loadStoredKeybindings(DEFAULT_KEYBINDS)).toEqual(custom);
+  });
+
+  it("loads defaults when stored JSON is malformed", () => {
+    localStorage.setItem(storageKey, "{not-json");
+
+    expect(loadStoredKeybindings(DEFAULT_KEYBINDS)).toEqual(DEFAULT_KEYBINDS);
+  });
+
+  it("loads defaults when a stored action is missing", () => {
+    const custom = rebindAction(DEFAULT_KEYBINDS, "arcaneShot", { kind: "keyboard", code: "KeyQ" }, true);
+    const incomplete: Partial<typeof custom> = { ...custom };
+    delete incomplete.autoShot;
+
+    localStorage.setItem(storageKey, JSON.stringify(incomplete));
+
+    expect(loadStoredKeybindings(DEFAULT_KEYBINDS)).toEqual(DEFAULT_KEYBINDS);
+  });
+
+  it("loads defaults when a stored binding shape is invalid", () => {
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        ...DEFAULT_KEYBINDS,
+        arcaneShot: { kind: "keyboard", code: 1 },
+      }),
+    );
+
+    expect(loadStoredKeybindings(DEFAULT_KEYBINDS)).toEqual(DEFAULT_KEYBINDS);
+  });
+
+  it("ignores stored keys that are not known actions", () => {
+    const custom = rebindAction(DEFAULT_KEYBINDS, "arcaneShot", { kind: "keyboard", code: "KeyQ" }, true);
+
+    localStorage.setItem(storageKey, JSON.stringify({ ...custom, unknownAction: { kind: "keyboard", code: "KeyP" } }));
+
+    expect(loadStoredKeybindings(DEFAULT_KEYBINDS)).toEqual(custom);
+  });
+
+  it("clears stored keybindings", () => {
+    saveStoredKeybindings(rebindAction(DEFAULT_KEYBINDS, "arcaneShot", { kind: "keyboard", code: "KeyQ" }, true));
+
+    clearStoredKeybindings();
+
+    expect(localStorage.getItem(storageKey)).toBeNull();
+  });
+
+  it("does not throw when storage read fails", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("storage blocked");
+    });
+
+    expect(loadStoredKeybindings(DEFAULT_KEYBINDS)).toEqual(DEFAULT_KEYBINDS);
+  });
+
+  it("does not throw when storage write fails", () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("storage blocked");
+    });
+
+    expect(() => saveStoredKeybindings(DEFAULT_KEYBINDS)).not.toThrow();
+  });
+
+  it("does not throw when storage remove fails", () => {
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+      throw new Error("storage blocked");
+    });
+
+    expect(() => clearStoredKeybindings()).not.toThrow();
   });
 });
 

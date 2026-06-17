@@ -10,6 +10,8 @@ import { expandRotationPattern } from "../sim/timeline";
 import type { SimEvent } from "../sim/types";
 import { EventLogPanel } from "../ui/EventLogPanel";
 
+const KEYBINDINGS_STORAGE_KEY = "melee-weaving-practice.keybindings.v1";
+
 vi.mock("../audio/attackSounds", () => ({
   preloadAttackSounds: vi.fn(),
   playAttackSoundsForEvents: vi.fn(),
@@ -20,6 +22,7 @@ vi.mock("../audio/successChime", () => ({
 }));
 
 afterEach(() => {
+  localStorage.clear();
   vi.clearAllMocks();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -27,10 +30,19 @@ afterEach(() => {
 
 describe("App UI", () => {
   const chronologicalAbilityPressNames = () =>
-    [...within(screen.getByRole("region", { name: "Event Log" })).getAllByRole("listitem")]
+    [...within(screen.getByRole("region", { name: "Event Log" })).queryAllByRole("listitem")]
       .reverse()
       .filter((row) => within(row).queryByText("ability-press") !== null)
       .map((row) => within(row).getByText(/^[a-z][A-Za-z]+$/, { selector: "strong" }).textContent ?? "");
+
+  const getArcaneShotKeybindingRow = () => {
+    const setButton = screen.getByRole("button", { name: "Set Arcane Shot" });
+    const row = setButton.closest(".keybinding-row");
+    if (row === null) {
+      throw new Error("Arcane Shot keybinding row not found");
+    }
+    return row as HTMLElement;
+  };
 
   it("renders trainer controls and reference panels", () => {
     render(<App />);
@@ -424,6 +436,94 @@ describe("App UI", () => {
     fireEvent.keyDown(document, { code: "KeyQ" });
     expect(screen.getByText("ability-press")).toBeInTheDocument();
     expect(screen.getAllByText("arcaneShot").length).toBeGreaterThan(0);
+  });
+
+  it("loads a saved keybinding map when the app remounts", () => {
+    vi.spyOn(performance, "now").mockReturnValue(0);
+    const { unmount } = render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Set Arcane Shot" }));
+    fireEvent.keyDown(document, { code: "KeyQ" });
+
+    expect(within(getArcaneShotKeybindingRow()).getByText("Q")).toBeInTheDocument();
+
+    unmount();
+    render(<App />);
+
+    expect(within(getArcaneShotKeybindingRow()).getByText("Q")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
+    fireEvent.keyDown(document, { code: "Digit1" });
+    expect(chronologicalAbilityPressNames()).not.toContain("arcaneShot");
+
+    fireEvent.keyDown(document, { code: "KeyQ" });
+    expect(chronologicalAbilityPressNames()).toContain("arcaneShot");
+  });
+
+  it("resets saved keybindings to defaults and restores default live input", () => {
+    vi.spyOn(performance, "now").mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Set Arcane Shot" }));
+    fireEvent.keyDown(document, { code: "KeyQ" });
+    expect(within(getArcaneShotKeybindingRow()).getByText("Q")).toBeInTheDocument();
+    expect(localStorage.getItem(KEYBINDINGS_STORAGE_KEY)).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset keybindings to default" }));
+
+    expect(within(getArcaneShotKeybindingRow()).getByText("1")).toBeInTheDocument();
+    expect(localStorage.getItem(KEYBINDINGS_STORAGE_KEY)).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
+    fireEvent.keyDown(document, { code: "KeyQ" });
+    expect(chronologicalAbilityPressNames()).not.toContain("arcaneShot");
+
+    fireEvent.keyDown(document, { code: "Digit1" });
+    expect(chronologicalAbilityPressNames()).toContain("arcaneShot");
+  });
+
+  it("restores default keybindings in memory even when stored reset fails", () => {
+    vi.spyOn(performance, "now").mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Set Arcane Shot" }));
+    fireEvent.keyDown(document, { code: "KeyQ" });
+    expect(within(getArcaneShotKeybindingRow()).getByText("Q")).toBeInTheDocument();
+    expect(localStorage.getItem(KEYBINDINGS_STORAGE_KEY)).not.toBeNull();
+
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+      throw new Error("storage blocked");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset keybindings to default" }));
+
+    expect(within(getArcaneShotKeybindingRow()).getByText("1")).toBeInTheDocument();
+    expect(localStorage.getItem(KEYBINDINGS_STORAGE_KEY)).not.toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
+    fireEvent.keyDown(document, { code: "KeyQ" });
+    expect(chronologicalAbilityPressNames()).not.toContain("arcaneShot");
+
+    fireEvent.keyDown(document, { code: "Digit1" });
+    expect(chronologicalAbilityPressNames()).toContain("arcaneShot");
+  });
+
+  it("cancels active keybinding capture when resetting to defaults", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Set Arcane Shot" }));
+    expect(screen.getByText("Listening")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset keybindings to default" }));
+
+    expect(screen.queryByText("Listening")).not.toBeInTheDocument();
+
+    fireEvent.keyDown(document, { code: "KeyQ" });
+
+    expect(within(getArcaneShotKeybindingRow()).getByText("1")).toBeInTheDocument();
   });
 });
 

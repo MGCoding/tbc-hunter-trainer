@@ -136,6 +136,10 @@ select {
   accent-color: #d7a84a;
 }
 
+.keybinding-reset-button {
+  margin-bottom: 12px;
+}
+
 .field span,
 .metric span,
 .latest-mistake span,

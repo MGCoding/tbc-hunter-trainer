@@ -5,6 +5,12 @@ import { playAttackSoundsForEvents, preloadAttackSounds } from "./audio/attackSo
 import { playSuccessChime } from "./audio/successChime";
 import { getRotationPreset } from "./data/rotations";
 import { PhaserHost } from "./game/PhaserHost";
+import {
+  getEffectiveRenderScale,
+  loadStoredRenderScalePreference,
+  saveStoredRenderScalePreference,
+  type RenderScalePreference,
+} from "./game/renderScale";
 import { getAbilityTiming } from "./sim/abilities";
 import { createInitialPosition, getRangeState, updateMovement } from "./sim/movement";
 import { scoreEvents } from "./sim/scoring";
@@ -93,6 +99,12 @@ export function App() {
   const [events, setEvents] = useState<SimEvent[]>([]);
   const [running, setRunning] = useState(false);
   const [keybindings, setKeybindings] = useState<KeybindingMap>(() => loadStoredKeybindings(DEFAULT_KEYBINDS));
+  const [renderScalePreference, setRenderScalePreference] = useState<RenderScalePreference>(() =>
+    loadStoredRenderScalePreference(),
+  );
+  const [devicePixelRatio, setDevicePixelRatio] = useState(() =>
+    typeof window === "undefined" ? 1 : getEffectiveRenderScale("auto", window.devicePixelRatio),
+  );
   const [captureAction, setCaptureAction] = useState<ActionId | null>(null);
   const [macroKillCommandIntoRaptorStrike, setMacroKillCommandIntoRaptorStrike] = useState(false);
 
@@ -238,6 +250,23 @@ export function App() {
     preloadAttackSounds();
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    function syncDevicePixelRatio(): void {
+      setDevicePixelRatio(getEffectiveRenderScale("auto", window.devicePixelRatio));
+    }
+
+    syncDevicePixelRatio();
+    window.addEventListener("resize", syncDevicePixelRatio);
+
+    return () => {
+      window.removeEventListener("resize", syncDevicePixelRatio);
+    };
+  }, []);
+
   const getPracticeState = useCallback((): PracticeState => {
     const nowMs = performance.now();
     const { range } = syncLiveStateToNow(nowMs);
@@ -277,6 +306,11 @@ export function App() {
     setSelectedPresetId(id);
     markSimulatorLogPublished([]);
     setEvents([]);
+  }
+
+  function handleRenderScalePreferenceChange(preference: RenderScalePreference): void {
+    setRenderScalePreference(preference);
+    saveStoredRenderScalePreference(preference);
   }
 
   function handleStop(): void {
@@ -419,6 +453,7 @@ export function App() {
         <PhaserHost
           preset={preset}
           ideal={ideal}
+          renderScalePreference={renderScalePreference}
           getPracticeState={getPracticeState}
           getKeybindings={getKeybindings}
           onMovementChange={handleMovementChange}
@@ -431,7 +466,10 @@ export function App() {
           score={score}
           timingMetrics={timingMetrics}
           running={running}
+          renderScalePreference={renderScalePreference}
+          devicePixelRatio={devicePixelRatio}
           onPresetChange={handlePresetChange}
+          onRenderScalePreferenceChange={handleRenderScalePreferenceChange}
           onStart={handleStart}
           onStop={handleStop}
         />

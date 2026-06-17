@@ -23,6 +23,7 @@ import {
   getTimelineEventY,
   getTimelineIconViews,
   getTimelineMarkerY,
+  getTextRenderResolution,
   WOWHEAD_ICON_BASE_URL,
 } from "../game/PracticeScene";
 import { DEFAULT_KEYBINDS } from "../data/constants";
@@ -126,6 +127,14 @@ describe("PracticeScene layout", () => {
     expect(getLastAutoDelayColor(null)).toBe(0xf5df9f);
     expect(getLastAutoDelayColor(199)).toBe(0xf5df9f);
     expect(getLastAutoDelayColor(200)).toBe(0xd9664f);
+  });
+
+  it("renders Phaser text at the effective high-DPI scale", () => {
+    expect(getTextRenderResolution(0)).toBe(1);
+    expect(getTextRenderResolution(1)).toBe(1);
+    expect(getTextRenderResolution(1.5)).toBe(1.5);
+    expect(getTextRenderResolution(2)).toBe(2);
+    expect(getTextRenderResolution(4)).toBe(4);
   });
 
   it("pins the timeline rail to the right side and above the bottom HUD when space allows", () => {

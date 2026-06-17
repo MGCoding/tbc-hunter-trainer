@@ -7,6 +7,7 @@ import { playAttackSoundsForEvents, preloadAttackSounds } from "../audio/attackS
 import { playSuccessChime } from "../audio/successChime";
 import { TIMING } from "../data/constants";
 import { getRotationPreset } from "../data/rotations";
+import type { RenderScalePreference } from "../game/renderScale";
 import { expandRotationPattern } from "../sim/timeline";
 import type { PracticeState, SimEvent } from "../sim/types";
 import { EventLogPanel } from "../ui/EventLogPanel";
@@ -15,16 +16,22 @@ const KEYBINDINGS_STORAGE_KEY = "melee-weaving-practice.keybindings.v1";
 
 const phaserHostTestHooks = vi.hoisted(() => ({
   getPracticeState: null as null | (() => PracticeState),
+  renderScalePreference: null as null | RenderScalePreference,
 }));
+
+type MockPhaserHostProps = ComponentProps<typeof import("../game/PhaserHost").PhaserHost> & {
+  renderScalePreference: RenderScalePreference;
+};
 
 vi.mock("../game/PhaserHost", async () => {
   const React = await vi.importActual<typeof import("react")>("react");
   const { attachBrowserInput } = await vi.importActual<typeof import("../input/browserInput")>("../input/browserInput");
 
   return {
-    PhaserHost(props: ComponentProps<typeof import("../game/PhaserHost").PhaserHost>) {
+    PhaserHost(props: MockPhaserHostProps) {
       const parentRef = React.useRef<HTMLDivElement | null>(null);
       phaserHostTestHooks.getPracticeState = props.getPracticeState;
+      phaserHostTestHooks.renderScalePreference = props.renderScalePreference;
 
       React.useEffect(() => {
         const parent = parentRef.current;
@@ -65,6 +72,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   phaserHostTestHooks.getPracticeState = null;
+  phaserHostTestHooks.renderScalePreference = null;
 });
 
 describe("App UI", () => {
@@ -97,6 +105,45 @@ describe("App UI", () => {
     expect(screen.getByText("Queue window")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reset Log" })).toBeInTheDocument();
+  });
+
+  it("renders Auto render scale by default and passes it to PhaserHost", () => {
+    render(<App />);
+
+    const renderScaleSelect = screen.getByLabelText("Render Scale");
+
+    expect(renderScaleSelect).toHaveValue("auto");
+    expect(within(renderScaleSelect).getByRole("option", { name: "Auto (1x)" })).toBeInTheDocument();
+    expect(within(renderScaleSelect).getByRole("option", { name: "1x" })).toBeInTheDocument();
+    expect(within(renderScaleSelect).getByRole("option", { name: "1.5x" })).toBeInTheDocument();
+    expect(within(renderScaleSelect).getByRole("option", { name: "2x" })).toBeInTheDocument();
+    expect(within(renderScaleSelect).getByRole("option", { name: "3x" })).toBeInTheDocument();
+    expect(within(renderScaleSelect).getByRole("option", { name: "4x" })).toBeInTheDocument();
+    expect(phaserHostTestHooks.renderScalePreference).toBe("auto");
+  });
+
+  it("updates and persists the selected render scale", () => {
+    const { unmount } = render(<App />);
+
+    fireEvent.change(screen.getByLabelText("Render Scale"), { target: { value: "2" } });
+
+    expect(screen.getByLabelText("Render Scale")).toHaveValue("2");
+    expect(phaserHostTestHooks.renderScalePreference).toBe(2);
+
+    unmount();
+    render(<App />);
+
+    expect(screen.getByLabelText("Render Scale")).toHaveValue("2");
+    expect(phaserHostTestHooks.renderScalePreference).toBe(2);
+  });
+
+  it("falls back to Auto for an invalid stored render scale", () => {
+    localStorage.setItem("melee-weaving-practice.renderScale.v1", JSON.stringify(2.5));
+
+    render(<App />);
+
+    expect(screen.getByLabelText("Render Scale")).toHaveValue("auto");
+    expect(phaserHostTestHooks.renderScalePreference).toBe("auto");
   });
 
   it("starts with quiet timing metric placeholders before any session events", () => {

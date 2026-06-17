@@ -1,5 +1,12 @@
 import { TIMING } from "../data/constants";
 import { ROTATION_PRESETS } from "../data/rotations";
+import {
+  RENDER_SCALE_OPTIONS,
+  formatRenderScaleOptionLabel,
+  getEffectiveRenderScale,
+  parseRenderScalePreference,
+  type RenderScalePreference,
+} from "../game/renderScale";
 import type { ScoreResult, TimingMetrics } from "../sim/types";
 
 interface ControlPanelProps {
@@ -7,7 +14,10 @@ interface ControlPanelProps {
   score: ScoreResult;
   timingMetrics: TimingMetrics;
   running: boolean;
+  renderScalePreference: RenderScalePreference;
+  devicePixelRatio: number;
   onPresetChange: (id: string) => void;
+  onRenderScalePreferenceChange: (preference: RenderScalePreference) => void;
   onStart: () => void;
   onStop: () => void;
 }
@@ -21,11 +31,15 @@ export function ControlPanel({
   score,
   timingMetrics,
   running,
+  renderScalePreference,
+  devicePixelRatio,
   onPresetChange,
+  onRenderScalePreferenceChange,
   onStart,
   onStop,
 }: ControlPanelProps) {
   const latestMistake = score.mistakes.at(-1);
+  const effectiveAutoScale = getEffectiveRenderScale("auto", devicePixelRatio);
 
   return (
     <section className="panel" aria-labelledby="control-panel-title">
@@ -40,6 +54,28 @@ export function ControlPanel({
           {ROTATION_PRESETS.map((preset) => (
             <option key={preset.id} value={preset.id}>
               {preset.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="field">
+        <span>Render Scale</span>
+        <select
+          aria-label="Render Scale"
+          value={String(renderScalePreference)}
+          onChange={(event) => {
+            const nextPreference = parseRenderScalePreference(
+              event.target.value === "auto" ? "auto" : Number(event.target.value),
+            );
+            if (nextPreference !== null) {
+              onRenderScalePreferenceChange(nextPreference);
+            }
+          }}
+        >
+          {RENDER_SCALE_OPTIONS.map((option) => (
+            <option key={String(option)} value={String(option)}>
+              {formatRenderScaleOptionLabel(option, effectiveAutoScale)}
             </option>
           ))}
         </select>

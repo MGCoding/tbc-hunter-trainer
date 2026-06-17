@@ -18,6 +18,9 @@ import type {
 export interface PracticeSceneData {
   preset: RotationPreset;
   ideal: IdealEvent[];
+  logicalWidth: number;
+  logicalHeight: number;
+  effectiveRenderScale: number;
   getPracticeState: () => PracticeState;
   getKeybindings: () => KeybindingMap;
 }
@@ -460,12 +463,18 @@ export function canDrawPracticeField(width: number, height: number, layout: Pick
   return width > 0 && height > 0 && Number.isFinite(getPracticeGridStep(layout)) && getPracticeGridStep(layout) > 0;
 }
 
+export function getTextRenderResolution(effectiveRenderScale: number): number {
+  return Number.isFinite(effectiveRenderScale) ? Math.max(1, effectiveRenderScale) : 1;
+}
+
 export class PracticeScene extends Phaser.Scene {
   private preset!: RotationPreset;
   private ideal!: IdealEvent[];
   private getPracticeState!: () => PracticeState;
   private getKeybindings!: () => KeybindingMap;
   private field!: Phaser.GameObjects.Graphics;
+  private screenLayer?: Phaser.GameObjects.Container;
+  private hudCamera?: Phaser.Cameras.Scene2D.Camera;
   private hud!: Phaser.GameObjects.Graphics;
   private castLabel!: Phaser.GameObjects.Text;
   private autoDelayMetricLabel!: Phaser.GameObjects.Text;
@@ -474,6 +483,9 @@ export class PracticeScene extends Phaser.Scene {
   private distanceLabel!: Phaser.GameObjects.Text;
   private abilityIcons: AbilityIconObject[] = [];
   private timelineIcons: TimelineIconObject[] = [];
+  private logicalWidth = 0;
+  private logicalHeight = 0;
+  private effectiveRenderScale = 1;
 
   constructor() {
     super("PracticeScene");
@@ -482,6 +494,9 @@ export class PracticeScene extends Phaser.Scene {
   init(data: PracticeSceneData): void {
     this.preset = data.preset;
     this.ideal = data.ideal;
+    this.logicalWidth = data.logicalWidth;
+    this.logicalHeight = data.logicalHeight;
+    this.effectiveRenderScale = data.effectiveRenderScale;
     this.getPracticeState = data.getPracticeState;
     this.getKeybindings = data.getKeybindings;
   }
@@ -518,11 +533,13 @@ export class PracticeScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor("#151719");
-    this.cameras.main.centerOn(0, 0);
+    this.applyRenderSurface();
 
     this.field = this.add.graphics();
+    this.screenLayer = this.add.container(0, 0).setScrollFactor(0);
     this.hud = this.add.graphics();
     this.hud.setScrollFactor(0);
+    this.screenLayer.add(this.hud);
     this.castLabel = this.add
       .text(0, 0, "", {
         color: "#f4f2ed",
@@ -532,6 +549,7 @@ export class PracticeScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
+    this.screenLayer.add(this.castLabel);
     this.lastAutoDelayLabel = this.add
       .text(0, 0, "", {
         color: "#f5df9f",
@@ -543,6 +561,7 @@ export class PracticeScene extends Phaser.Scene {
       })
       .setOrigin(1, 0.5)
       .setScrollFactor(0);
+    this.screenLayer.add(this.lastAutoDelayLabel);
     this.autoDelayMetricLabel = this.add
       .text(0, 0, "", {
         color: "#f4f2ed",
@@ -552,6 +571,7 @@ export class PracticeScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
+    this.screenLayer.add(this.autoDelayMetricLabel);
     this.weaveMetricLabel = this.add
       .text(0, 0, "", {
         color: "#f4f2ed",
@@ -561,6 +581,7 @@ export class PracticeScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
+    this.screenLayer.add(this.weaveMetricLabel);
     this.distanceLabel = this.add
       .text(0, 0, "", {
         color: "#f4f2ed",
@@ -594,11 +615,18 @@ export class PracticeScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setScrollFactor(0);
 
+      this.screenLayer?.add([image, hotkeyText, cooldownText]);
+
       return { image, hotkeyText, cooldownText };
     });
     this.timelineIcons = this.ideal.map(() => ({
       image: this.add.image(0, 0, "").setScrollFactor(0),
     }));
+    this.screenLayer.add(this.timelineIcons.map((object) => object.image));
+    this.hudCamera = this.cameras.add(0, 0, 1, 1);
+    this.cameras.main.ignore(this.screenLayer);
+    this.hudCamera.ignore([this.field, this.distanceLabel]);
+    this.applyRenderSurface();
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
@@ -606,8 +634,12 @@ export class PracticeScene extends Phaser.Scene {
   }
 
   update(): void {
+    if (!this.field || !this.hud) {
+      return;
+    }
+
     const state = this.getPracticeState();
-    this.cameras.main.centerOn(0, 0);
+    this.applyRenderSurface();
     this.drawField(state);
     this.drawHud(state);
   }
@@ -616,10 +648,59 @@ export class PracticeScene extends Phaser.Scene {
     this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
   }
 
-  private handleResize(gameSize: Phaser.Structs.Size): void {
-    this.cameras.main.setViewport(0, 0, gameSize.width, gameSize.height);
+  updateRenderSurface(logicalWidth: number, logicalHeight: number, effectiveRenderScale: number): void {
+    this.logicalWidth = logicalWidth;
+    this.logicalHeight = logicalHeight;
+    this.effectiveRenderScale = effectiveRenderScale;
+    this.applyRenderSurface();
+    if (this.field) {
+      this.drawField(this.getPracticeState());
+    }
+  }
+
+  private applyRenderSurface(): void {
+    const physicalWidth = Math.round(this.logicalWidth * this.effectiveRenderScale);
+    const physicalHeight = Math.round(this.logicalHeight * this.effectiveRenderScale);
+
+    this.cameras.main.setViewport(0, 0, physicalWidth, physicalHeight);
+    this.cameras.main.setZoom(this.effectiveRenderScale);
     this.cameras.main.centerOn(0, 0);
-    this.drawField(this.getPracticeState());
+    this.hudCamera?.setViewport(0, 0, physicalWidth, physicalHeight);
+    this.hudCamera?.setScroll(0, 0);
+    this.hudCamera?.setZoom(1);
+    this.screenLayer?.setPosition(0, 0);
+    this.screenLayer?.setScale(this.effectiveRenderScale);
+    this.applyTextResolution();
+  }
+
+  private applyTextResolution(): void {
+    const resolution = getTextRenderResolution(this.effectiveRenderScale);
+
+    for (const text of this.getTextObjects()) {
+      if (text.style.resolution !== resolution) {
+        text.setResolution(resolution);
+      }
+    }
+  }
+
+  private getTextObjects(): Phaser.GameObjects.Text[] {
+    const abilityTextObjects = this.abilityIcons.flatMap((object) => [object.hotkeyText, object.cooldownText]);
+
+    return [
+      this.castLabel,
+      this.lastAutoDelayLabel,
+      this.autoDelayMetricLabel,
+      this.weaveMetricLabel,
+      this.distanceLabel,
+      ...abilityTextObjects,
+    ].filter((text): text is Phaser.GameObjects.Text => text !== undefined);
+  }
+
+  private handleResize(): void {
+    this.applyRenderSurface();
+    if (this.field) {
+      this.drawField(this.getPracticeState());
+    }
   }
 
   private getTargetOffset(position: PracticePosition, yardPx: number): { x: number; y: number } {
@@ -630,9 +711,8 @@ export class PracticeScene extends Phaser.Scene {
   }
 
   private drawField(state: PracticeState): void {
-    const camera = this.cameras.main;
-    const width = camera.width;
-    const height = camera.height;
+    const width = this.logicalWidth;
+    const height = this.logicalHeight;
     const halfW = width / 2;
     const halfH = height / 2;
     const layout = calculatePracticeLayout(width, height);
@@ -695,9 +775,8 @@ export class PracticeScene extends Phaser.Scene {
   }
 
   private drawHud(practiceState: PracticeState): void {
-    const camera = this.cameras.main;
     const state = practiceState.simulator;
-    const { hud } = calculatePracticeLayout(camera.width, camera.height);
+    const { hud } = calculatePracticeLayout(this.logicalWidth, this.logicalHeight);
 
     this.hud.clear();
 
@@ -706,7 +785,7 @@ export class PracticeScene extends Phaser.Scene {
     const castProgress = activeCast ? clamp01((state.nowMs - activeCast.startedAtMs) / castDuration) : 0;
     this.drawBar(hud.left, hud.top, hud.width, hud.castHeight, castProgress, 0xd7a84a, 0.95);
 
-    this.castLabel.setPosition(camera.width / 2, hud.top + hud.castHeight / 2 - 1);
+    this.castLabel.setPosition(this.logicalWidth / 2, hud.top + hud.castHeight / 2 - 1);
     this.castLabel.setText(activeCast ? activeCast.ability : "");
 
     const meleeTop = hud.top + hud.castHeight + hud.gap;
@@ -824,9 +903,8 @@ export class PracticeScene extends Phaser.Scene {
   }
 
   private drawTimelineRail(state: SimulatorState): void {
-    const camera = this.cameras.main;
     const views = getTimelineIconViews(this.ideal);
-    const layout = calculateTimelineRailLayout(camera.width, camera.height, views.length);
+    const layout = calculateTimelineRailLayout(this.logicalWidth, this.logicalHeight, views.length);
 
     for (let index = 0; index < this.timelineIcons.length; index += 1) {
       this.timelineIcons[index].image.setVisible(false);

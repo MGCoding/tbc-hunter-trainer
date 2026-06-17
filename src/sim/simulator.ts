@@ -14,6 +14,7 @@ export class Simulator {
   private readonly log = new SessionLog();
   private state: SimulatorState;
   private readonly cooldownReadyAtMs: Partial<Record<AbilityId, number>> = {};
+  private autoWindupLoggedForAutoAtMs: number | null = null;
 
   constructor(private readonly preset: RotationPreset) {
     this.state = {
@@ -65,7 +66,7 @@ export class Simulator {
     if (this.state.autoRangeBlocked) {
       const sparkAtMs = this.state.nextAutoAtMs - TIMING.noMoveNoCastLeadMs;
       if (!this.state.autoPaused && atMs >= sparkAtMs) {
-        this.state.nextAutoAtMs = atMs + TIMING.autoWindupMs / this.preset.hasteFactor;
+        this.rescheduleNextAuto(atMs + TIMING.autoWindupMs / this.preset.hasteFactor);
       }
     }
 
@@ -195,7 +196,7 @@ export class Simulator {
 
     const sparkAtMs = this.state.nextAutoAtMs - TIMING.noMoveNoCastLeadMs;
     if (atMs >= sparkAtMs) {
-      this.state.nextAutoAtMs = atMs + TIMING.autoWindupMs / this.preset.hasteFactor;
+      this.rescheduleNextAuto(atMs + TIMING.autoWindupMs / this.preset.hasteFactor);
     }
 
     this.state.autoPaused = false;
@@ -217,12 +218,16 @@ export class Simulator {
       return;
     }
 
+    this.emitAutoWindupIfDue(toMs);
+
     while (toMs >= this.state.nextAutoAtMs) {
       const currentAutoAtMs = this.state.nextAutoAtMs;
       const sparkAt = currentAutoAtMs - TIMING.noMoveNoCastLeadMs;
       const active = this.state.activeCast;
       const activeCastBlocksAuto =
         active !== null && active.startedAtMs <= sparkAt && active.completesAtMs > sparkAt;
+
+      this.emitAutoWindupIfDue(currentAutoAtMs);
 
       if (activeCastBlocksAuto) {
         this.log.add({
@@ -231,20 +236,42 @@ export class Simulator {
           ability: "autoShot",
           reason: "casting-at-spark",
         });
-        this.state.nextAutoAtMs += active.completesAtMs - sparkAt;
+        this.rescheduleNextAuto(this.state.nextAutoAtMs + active.completesAtMs - sparkAt);
       } else {
-        this.log.add({
-          type: "auto-windup",
-          atMs: currentAutoAtMs - TIMING.autoWindupMs / this.preset.hasteFactor,
-          ability: "autoShot",
-        });
         this.log.add({ type: "auto-fire", atMs: currentAutoAtMs, ability: "autoShot" });
-        this.state.nextAutoAtMs += this.preset.targetRangedSwingMs;
+        this.rescheduleNextAuto(this.state.nextAutoAtMs + this.preset.targetRangedSwingMs);
       }
 
       if (this.state.nextAutoAtMs <= currentAutoAtMs) {
-        this.state.nextAutoAtMs = currentAutoAtMs + this.preset.targetRangedSwingMs;
+        this.rescheduleNextAuto(currentAutoAtMs + this.preset.targetRangedSwingMs);
       }
     }
+  }
+
+  private getAutoWindupAtMs(autoAtMs: number): number {
+    return autoAtMs - TIMING.autoWindupMs / this.preset.hasteFactor;
+  }
+
+  private emitAutoWindupIfDue(toMs: number): void {
+    if (this.state.autoPaused || this.state.autoRangeBlocked) {
+      return;
+    }
+
+    const autoAtMs = this.state.nextAutoAtMs;
+    const windupAtMs = this.getAutoWindupAtMs(autoAtMs);
+    if (toMs < windupAtMs || this.autoWindupLoggedForAutoAtMs === autoAtMs) {
+      return;
+    }
+
+    this.log.add({ type: "auto-windup", atMs: windupAtMs, ability: "autoShot" });
+    this.autoWindupLoggedForAutoAtMs = autoAtMs;
+  }
+
+  private rescheduleNextAuto(nextAutoAtMs: number): void {
+    if (this.state.nextAutoAtMs !== nextAutoAtMs) {
+      this.autoWindupLoggedForAutoAtMs = null;
+    }
+
+    this.state.nextAutoAtMs = nextAutoAtMs;
   }
 }

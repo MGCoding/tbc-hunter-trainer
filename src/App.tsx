@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DEFAULT_KEYBINDS } from "./data/constants";
+import { playAttackSoundsForEvents, preloadAttackSounds } from "./audio/attackSounds";
 import { playSuccessChime } from "./audio/successChime";
 import { getRotationPreset } from "./data/rotations";
 import { PhaserHost } from "./game/PhaserHost";
@@ -89,6 +90,7 @@ export function App() {
   const movementUpdatedAtMsRef = useRef(0);
   const keybindingsRef = useRef<KeybindingMap>(keybindings);
   const perfectPressKeysRef = useRef<Set<string>>(new Set());
+  const processedAttackSoundEventsRef = useRef<Map<string, number>>(new Map());
   runningRef.current = running;
   keybindingsRef.current = keybindings;
 
@@ -143,6 +145,41 @@ export function App() {
     return { elapsedMs, range };
   }
 
+  function getAttackSoundEventSignature(event: SimEvent): string {
+    return JSON.stringify([event.type, event.atMs, event.ability ?? null, event.reason ?? null, event.detail ?? null]);
+  }
+
+  function resetProcessedAttackSoundEvents(): void {
+    processedAttackSoundEventsRef.current = new Map();
+  }
+
+  function playNewAttackSoundEvents(): void {
+    const log = getSimulator().getLog();
+    const processedEvents = processedAttackSoundEventsRef.current;
+    const scannedEvents = new Map<string, number>();
+    const newEvents: SimEvent[] = [];
+
+    for (const event of log) {
+      const signature = getAttackSoundEventSignature(event);
+      const occurrenceCount = (scannedEvents.get(signature) ?? 0) + 1;
+      scannedEvents.set(signature, occurrenceCount);
+
+      if (occurrenceCount > (processedEvents.get(signature) ?? 0)) {
+        newEvents.push(event);
+      }
+    }
+
+    processedAttackSoundEventsRef.current = scannedEvents;
+
+    if (newEvents.length > 0) {
+      playAttackSoundsForEvents(newEvents);
+    }
+  }
+
+  useEffect(() => {
+    preloadAttackSounds();
+  }, []);
+
   const getPracticeState = useCallback((): PracticeState => {
     const nowMs = performance.now();
     const { range } = syncLiveStateToNow(nowMs);
@@ -153,6 +190,7 @@ export function App() {
       nowMs,
       sessionStartedAtRef.current,
     );
+    playNewAttackSoundEvents();
 
     return {
       simulator: simulatorState,
@@ -168,6 +206,7 @@ export function App() {
 
   function handlePresetChange(id: string): void {
     simulatorRef.current = createSimulator(getRotationPreset(id));
+    resetProcessedAttackSoundEvents();
     positionRef.current = createInitialPosition();
     movementKeysRef.current = { ...EMPTY_MOVEMENT_KEYS };
     movementUpdatedAtMsRef.current = 0;
@@ -182,6 +221,7 @@ export function App() {
       const nowMs = performance.now();
       syncLiveStateToNow(nowMs);
       tickSimulatorToSessionNow(getSimulator(), nowMs, sessionStartedAtRef.current);
+      playNewAttackSoundEvents();
     }
 
     setRunning(false);
@@ -190,6 +230,7 @@ export function App() {
 
   function handleStart(): void {
     simulatorRef.current = createSimulator(preset);
+    resetProcessedAttackSoundEvents();
     positionRef.current = createInitialPosition();
     movementKeysRef.current = { ...EMPTY_MOVEMENT_KEYS };
     movementUpdatedAtMsRef.current = 0;
@@ -217,6 +258,7 @@ export function App() {
       const timing = getAbilityTiming(action, preset);
       if ((timing.requiresMelee && !range.canMelee) || (timing.requiresRanged && !range.canUseRanged)) {
         simulator.recordInvalidInput(action, atMs, "out-of-range");
+        playNewAttackSoundEvents();
         setEvents(simulator.getLog());
         return;
       }
@@ -231,6 +273,7 @@ export function App() {
         perfectPressKeysRef.current.add(perfectPressKey);
         playSuccessChime();
       }
+      playNewAttackSoundEvents();
       setEvents(simulator.getLog());
     },
     [ideal, preset],
@@ -240,9 +283,12 @@ export function App() {
     if (running) {
       const nowMs = performance.now();
       syncLiveStateToNow(nowMs);
+      playNewAttackSoundEvents();
       clearSimulatorLogAtSessionNow(getSimulator(), nowMs, sessionStartedAtRef.current);
+      resetProcessedAttackSoundEvents();
     } else {
       getSimulator().resetLog();
+      resetProcessedAttackSoundEvents();
     }
 
     setEvents([]);

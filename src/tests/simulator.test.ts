@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { TIMING } from "../data/constants";
 import { getRotationPreset } from "../data/rotations";
 import { createSimulator } from "../sim/simulator";
 import { expandRotationPattern } from "../sim/timeline";
@@ -34,6 +35,22 @@ describe("simulator", () => {
     sim.tick(autoDue - 10);
     sim.pressAbility("steadyShot", autoDue - 10);
     expect(sim.getLog().some((event) => event.type === "cast-start" && event.ability === "steadyShot")).toBe(true);
+  });
+
+  it("logs Auto Shot windup when windup starts before the shot fires", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+    const windupAtMs = preset.targetRangedSwingMs - TIMING.autoWindupMs / preset.hasteFactor;
+
+    sim.tick(windupAtMs - 1);
+    expect(sim.getLog().filter((event) => event.type === "auto-windup")).toHaveLength(0);
+
+    sim.tick(windupAtMs);
+    expect(sim.getLog()).toContainEqual({ type: "auto-windup", atMs: windupAtMs, ability: "autoShot" });
+    expect(sim.getLog()).not.toContainEqual({ type: "auto-fire", atMs: preset.targetRangedSwingMs, ability: "autoShot" });
+
+    sim.tick(windupAtMs + 10);
+    expect(sim.getLog().filter((event) => event.type === "auto-windup")).toHaveLength(1);
   });
 
   it("processes every Auto Shot due within a large tick", () => {
@@ -231,13 +248,16 @@ describe("simulator", () => {
   });
 
   it("clips Auto Shot when Steady Shot is still casting at no-move/no-cast spark", () => {
-    const sim = createSimulator(getRotationPreset("one-one"));
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
     const autoDue = sim.getState().nextAutoAtMs;
+    const windupAtMs = autoDue - TIMING.autoWindupMs / preset.hasteFactor;
     const spark = autoDue - 500;
 
     sim.pressAbility("steadyShot", spark - 100);
     sim.tick(autoDue);
 
+    expect(sim.getLog()).toContainEqual({ type: "auto-windup", atMs: windupAtMs, ability: "autoShot" });
     expect(sim.getLog()).toContainEqual({
       type: "auto-clipped",
       atMs: autoDue,

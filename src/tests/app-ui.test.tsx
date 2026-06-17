@@ -2,17 +2,25 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { App } from "../App";
+import { playAttackSoundsForEvents, preloadAttackSounds } from "../audio/attackSounds";
 import { playSuccessChime } from "../audio/successChime";
+import { TIMING } from "../data/constants";
 import { getRotationPreset } from "../data/rotations";
 import { expandRotationPattern } from "../sim/timeline";
 import type { SimEvent } from "../sim/types";
 import { EventLogPanel } from "../ui/EventLogPanel";
+
+vi.mock("../audio/attackSounds", () => ({
+  preloadAttackSounds: vi.fn(),
+  playAttackSoundsForEvents: vi.fn(),
+}));
 
 vi.mock("../audio/successChime", () => ({
   playSuccessChime: vi.fn(),
 }));
 
 afterEach(() => {
+  vi.clearAllMocks();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -37,6 +45,95 @@ describe("App UI", () => {
 
     expect(screen.getByText("100%")).toBeInTheDocument();
     expect(screen.getByText("No mistakes recorded")).toBeInTheDocument();
+  });
+
+  it("preloads attack sounds once on app load", () => {
+    render(<App />);
+
+    expect(preloadAttackSounds).toHaveBeenCalledTimes(1);
+  });
+
+  it("forwards new simulator attack events when stopping a running session", () => {
+    const now = vi.spyOn(performance, "now");
+    const preset = getRotationPreset("french-weaving-5511-3w");
+    const expectedAutoFireAtMs = preset.targetRangedSwingMs;
+    const expectedAutoWindupAtMs = expectedAutoFireAtMs - TIMING.autoWindupMs / preset.hasteFactor;
+
+    now.mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
+    vi.mocked(playAttackSoundsForEvents).mockClear();
+    now.mockReturnValue(2_600);
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+
+    const forwardedEvents = vi.mocked(playAttackSoundsForEvents).mock.calls.flatMap(([events]) => events);
+
+    expect(forwardedEvents).toContainEqual({
+      type: "auto-windup",
+      atMs: expectedAutoWindupAtMs,
+      ability: "autoShot",
+    });
+    expect(forwardedEvents).toContainEqual({ type: "auto-fire", atMs: expectedAutoFireAtMs, ability: "autoShot" });
+  });
+
+  it("does not replay already processed attack events across later state updates", () => {
+    const now = vi.spyOn(performance, "now");
+
+    now.mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
+    vi.mocked(playAttackSoundsForEvents).mockClear();
+    now.mockReturnValue(2_600);
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    const callCountAfterStop = vi.mocked(playAttackSoundsForEvents).mock.calls.length;
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
+
+    expect(callCountAfterStop).toBeGreaterThan(0);
+    expect(playAttackSoundsForEvents).toHaveBeenCalledTimes(callCountAfterStop);
+  });
+
+  it("forwards sorted-inserted auto events without replaying already processed ability events", () => {
+    const now = vi.spyOn(performance, "now");
+    const preset = getRotationPreset("french-weaving-5511-3w");
+    const expectedAutoFireAtMs = preset.targetRangedSwingMs;
+    const expectedAutoWindupAtMs = expectedAutoFireAtMs - TIMING.autoWindupMs / preset.hasteFactor;
+
+    now.mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
+    vi.mocked(playAttackSoundsForEvents).mockClear();
+
+    now.mockReturnValue(1_800);
+    fireEvent.keyDown(document, { code: "Digit4" });
+
+    const abilityEvents = vi.mocked(playAttackSoundsForEvents).mock.calls.flatMap(([events]) => events);
+    expect(abilityEvents).toContainEqual({ type: "ability-press", atMs: 1800, ability: "steadyShot" });
+    expect(abilityEvents).toContainEqual({
+      type: "auto-windup",
+      atMs: expectedAutoWindupAtMs,
+      ability: "autoShot",
+    });
+
+    vi.mocked(playAttackSoundsForEvents).mockClear();
+    now.mockReturnValue(2_600);
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+
+    const forwardedEvents = vi.mocked(playAttackSoundsForEvents).mock.calls.flatMap(([events]) => events);
+
+    expect(forwardedEvents).not.toContainEqual({
+      type: "auto-windup",
+      atMs: expectedAutoWindupAtMs,
+      ability: "autoShot",
+    });
+    expect(forwardedEvents).toContainEqual({ type: "auto-fire", atMs: expectedAutoFireAtMs, ability: "autoShot" });
+    expect(forwardedEvents).not.toContainEqual({ type: "ability-press", atMs: 1800, ability: "steadyShot" });
   });
 
   it("toggles running status and start stop disabled states", () => {

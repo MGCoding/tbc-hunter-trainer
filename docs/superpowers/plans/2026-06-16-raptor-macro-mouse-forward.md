@@ -65,10 +65,13 @@ Append these tests inside the existing `describe("browser input adapter", () => 
       onAbilityPress: vi.fn(),
     });
 
-    target.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyW", cancelable: true }));
     target.dispatchEvent(new MouseEvent("mousedown", { button: 0, cancelable: true }));
     target.dispatchEvent(new MouseEvent("mousedown", { button: 2, cancelable: true }));
+    target.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyW", cancelable: true }));
     target.dispatchEvent(new MouseEvent("mouseup", { button: 2, cancelable: true }));
+
+    expect(onMovementChange).toHaveBeenCalledTimes(1);
+
     target.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyW", cancelable: true }));
 
     expect(onMovementChange).toHaveBeenNthCalledWith(1, {

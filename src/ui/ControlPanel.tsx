@@ -1,17 +1,30 @@
 import { TIMING } from "../data/constants";
 import { ROTATION_PRESETS } from "../data/rotations";
-import type { ScoreResult } from "../sim/types";
+import type { ScoreResult, TimingMetrics } from "../sim/types";
 
 interface ControlPanelProps {
   selectedPresetId: string;
   score: ScoreResult;
+  timingMetrics: TimingMetrics;
   running: boolean;
   onPresetChange: (id: string) => void;
   onStart: () => void;
   onStop: () => void;
 }
 
-export function ControlPanel({ selectedPresetId, score, running, onPresetChange, onStart, onStop }: ControlPanelProps) {
+function formatMetricMs(value: number | null): string {
+  return value === null ? "--ms" : `${Math.round(value)}ms`;
+}
+
+export function ControlPanel({
+  selectedPresetId,
+  score,
+  timingMetrics,
+  running,
+  onPresetChange,
+  onStart,
+  onStop,
+}: ControlPanelProps) {
   const latestMistake = score.mistakes.at(-1);
 
   return (
@@ -34,8 +47,12 @@ export function ControlPanel({ selectedPresetId, score, running, onPresetChange,
 
       <div className="metric-grid">
         <div className="metric">
-          <span>Efficiency</span>
-          <strong>{score.efficiency}%</strong>
+          <span>Auto delay</span>
+          <strong>{formatMetricMs(timingMetrics.autoDelayAverageMs)}</strong>
+        </div>
+        <div className="metric">
+          <span>Weave time</span>
+          <strong>{formatMetricMs(timingMetrics.weaveAverageMs)}</strong>
         </div>
         <div className="metric">
           <span>Queue window</span>

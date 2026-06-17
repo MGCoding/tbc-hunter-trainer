@@ -9,6 +9,7 @@ import { getAbilityTiming } from "./sim/abilities";
 import { createInitialPosition, getRangeState, updateMovement } from "./sim/movement";
 import { scoreEvents } from "./sim/scoring";
 import { createSimulator } from "./sim/simulator";
+import { getTimingMetrics } from "./sim/timingMetrics";
 import { describePerfectPressKey, expandRotationPattern, findPerfectPress } from "./sim/timeline";
 import type { Simulator } from "./sim/simulator";
 import type {
@@ -43,6 +44,11 @@ const EMPTY_MOVEMENT_KEYS: MovementKeys = {
   left: false,
   right: false,
 };
+
+function hasActiveMovement(keys: MovementKeys): boolean {
+  return keys.forward || keys.backward || keys.left || keys.right;
+}
+
 const KEYBINDING_ROWS: { action: ActionId; label: string }[] = [
   { action: "moveForward", label: "Move Forward" },
   { action: "moveBackward", label: "Move Backward" },
@@ -101,6 +107,7 @@ export function App() {
   const macroKillCommandIntoRaptorStrikeRef = useRef(macroKillCommandIntoRaptorStrike);
   const perfectPressKeysRef = useRef<Set<string>>(new Set());
   const processedAttackSoundEventsRef = useRef<Map<string, number>>(new Map());
+  const publishedSimulatorLogSignatureRef = useRef("");
   runningRef.current = running;
   keybindingsRef.current = keybindings;
   macroKillCommandIntoRaptorStrikeRef.current = macroKillCommandIntoRaptorStrike;
@@ -122,6 +129,7 @@ export function App() {
     }
     return scoreEvents(ideal, events);
   }, [events, ideal]);
+  const timingMetrics = useMemo(() => getTimingMetrics(events), [events]);
 
   function syncMovementToElapsed(elapsedMs: number): void {
     if (!runningRef.current) {
@@ -150,14 +158,53 @@ export function App() {
     return range;
   }
 
+  function syncAutoShotMovementToElapsed(elapsedMs: number, keys = movementKeysRef.current): void {
+    if (runningRef.current) {
+      getSimulator().setAutoShotMovementAllowed(!hasActiveMovement(keys), elapsedMs);
+    }
+  }
+
   function syncLiveStateToNow(nowMs: number): { elapsedMs: number; range: RangeState } {
     const elapsedMs = syncMovementToNow(nowMs);
+    syncAutoShotMovementToElapsed(elapsedMs);
     const range = syncAutoShotRangeToElapsed(elapsedMs);
     return { elapsedMs, range };
   }
 
   function getAttackSoundEventSignature(event: SimEvent): string {
     return JSON.stringify([event.type, event.atMs, event.ability ?? null, event.reason ?? null, event.detail ?? null]);
+  }
+
+  function getSimulatorLogEventSignature(event: SimEvent): string {
+    return JSON.stringify([
+      event.type,
+      event.atMs,
+      event.ability ?? null,
+      event.reason ?? null,
+      event.detail ?? null,
+      event.delayMs ?? null,
+      event.originalAtMs ?? null,
+      event.rescheduledAtMs ?? null,
+    ]);
+  }
+
+  function getSimulatorLogSignature(log: SimEvent[]): string {
+    const lastEvent = log.at(-1);
+    return `${log.length}:${lastEvent ? getSimulatorLogEventSignature(lastEvent) : "empty"}`;
+  }
+
+  function markSimulatorLogPublished(log: SimEvent[]): void {
+    publishedSimulatorLogSignatureRef.current = getSimulatorLogSignature(log);
+  }
+
+  function publishSimulatorLogIfChanged(log = getSimulator().getLog()): void {
+    const signature = getSimulatorLogSignature(log);
+    if (signature === publishedSimulatorLogSignatureRef.current) {
+      return;
+    }
+
+    publishedSimulatorLogSignatureRef.current = signature;
+    setEvents(log);
   }
 
   function resetProcessedAttackSoundEvents(): void {
@@ -201,7 +248,10 @@ export function App() {
       nowMs,
       sessionStartedAtRef.current,
     );
+    const log = simulator.getLog();
+    const metrics = getTimingMetrics(log);
     playNewAttackSoundEvents();
+    publishSimulatorLogIfChanged(log);
 
     return {
       simulator: simulatorState,
@@ -210,6 +260,7 @@ export function App() {
         target: { ...positionRef.current.target },
       },
       range,
+      metrics,
     };
   }, []);
 
@@ -224,6 +275,7 @@ export function App() {
     perfectPressKeysRef.current.clear();
     setRunning(false);
     setSelectedPresetId(id);
+    markSimulatorLogPublished([]);
     setEvents([]);
   }
 
@@ -236,7 +288,7 @@ export function App() {
     }
 
     setRunning(false);
-    setEvents(getSimulator().getLog());
+    publishSimulatorLogIfChanged();
   }
 
   function handleStart(): void {
@@ -247,15 +299,19 @@ export function App() {
     movementUpdatedAtMsRef.current = 0;
     perfectPressKeysRef.current.clear();
     sessionStartedAtRef.current = performance.now();
+    markSimulatorLogPublished([]);
     setEvents([]);
     setRunning(true);
   }
 
   const handleMovementChange = useCallback((keys: MovementKeys): void => {
-    if (runningRef.current) {
-      syncMovementToNow(performance.now());
-    }
+    const nowMs = performance.now();
+    const elapsedMs = syncMovementToNow(nowMs);
     movementKeysRef.current = keys;
+    syncAutoShotMovementToElapsed(elapsedMs, keys);
+    syncAutoShotRangeToElapsed(elapsedMs);
+    playNewAttackSoundEvents();
+    publishSimulatorLogIfChanged();
   }, []);
 
   const handleAbilityPress = useCallback(
@@ -291,7 +347,7 @@ export function App() {
       }
 
       playNewAttackSoundEvents();
-      setEvents(simulator.getLog());
+      publishSimulatorLogIfChanged(simulator.getLog());
     },
     [ideal, preset],
   );
@@ -308,6 +364,7 @@ export function App() {
       resetProcessedAttackSoundEvents();
     }
 
+    markSimulatorLogPublished([]);
     setEvents([]);
   }
 
@@ -372,6 +429,7 @@ export function App() {
         <ControlPanel
           selectedPresetId={selectedPresetId}
           score={score}
+          timingMetrics={timingMetrics}
           running={running}
           onPresetChange={handlePresetChange}
           onStart={handleStart}

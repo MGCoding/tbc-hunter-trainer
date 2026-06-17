@@ -1,10 +1,11 @@
 import { TIMING } from "../data/constants";
 import { getAbilityTiming } from "./abilities";
 import { SessionLog } from "./sessionLog";
-import type { AbilityId, RotationPreset, SimEvent, SimulatorState } from "./types";
+import type { AbilityId, AutoDelayReason, RotationPreset, SimEvent, SimulatorState } from "./types";
 
 const GCD_ABILITIES = new Set<AbilityId>(["steadyShot", "multiShot", "arcaneShot"]);
 const RANGED_ATTACK_ABILITIES = new Set<AbilityId>(["steadyShot", "multiShot", "arcaneShot"]);
+const TIMING_EPSILON_MS = 0.001;
 
 export function createSimulator(preset: RotationPreset): Simulator {
   return new Simulator(preset);
@@ -15,6 +16,7 @@ export class Simulator {
   private state: SimulatorState;
   private readonly cooldownReadyAtMs: Partial<Record<AbilityId, number>> = {};
   private autoWindupLoggedForAutoAtMs: number | null = null;
+  private pendingAutoDelay: { originalAtMs: number; reason: AutoDelayReason } | null = null;
 
   constructor(private readonly preset: RotationPreset) {
     this.state = {
@@ -27,6 +29,7 @@ export class Simulator {
       queuedAbility: null,
       autoPaused: false,
       autoRangeBlocked: false,
+      autoMovementBlocked: false,
     };
   }
 
@@ -58,19 +61,37 @@ export class Simulator {
 
   setAutoShotRangeAllowed(isAllowed: boolean, atMs: number): void {
     if (!isAllowed) {
-      this.state.autoRangeBlocked = true;
       this.tick(atMs);
+      this.state.autoRangeBlocked = true;
       return;
     }
 
     if (this.state.autoRangeBlocked) {
       const sparkAtMs = this.state.nextAutoAtMs - TIMING.noMoveNoCastLeadMs;
-      if (!this.state.autoPaused && atMs >= sparkAtMs) {
-        this.rescheduleNextAuto(atMs + TIMING.autoWindupMs / this.preset.hasteFactor);
+      if (!this.state.autoPaused && !this.state.autoMovementBlocked && atMs >= sparkAtMs) {
+        this.rescheduleDelayedAuto(atMs + TIMING.autoWindupMs / this.preset.hasteFactor, "range-blocked");
       }
     }
 
     this.state.autoRangeBlocked = false;
+    this.tick(atMs);
+  }
+
+  setAutoShotMovementAllowed(isAllowed: boolean, atMs: number): void {
+    if (!isAllowed) {
+      this.tick(atMs);
+      this.state.autoMovementBlocked = true;
+      return;
+    }
+
+    if (this.state.autoMovementBlocked) {
+      const sparkAtMs = this.state.nextAutoAtMs - TIMING.noMoveNoCastLeadMs;
+      if (!this.state.autoPaused && !this.state.autoRangeBlocked && atMs >= sparkAtMs) {
+        this.rescheduleDelayedAuto(atMs + TIMING.autoWindupMs / this.preset.hasteFactor, "moving");
+      }
+    }
+
+    this.state.autoMovementBlocked = false;
     this.tick(atMs);
   }
 
@@ -214,7 +235,7 @@ export class Simulator {
   }
 
   private processAutoWindow(toMs: number): void {
-    if (this.state.autoPaused || this.state.autoRangeBlocked) {
+    if (this.state.autoPaused || this.state.autoRangeBlocked || this.state.autoMovementBlocked) {
       return;
     }
 
@@ -225,20 +246,14 @@ export class Simulator {
       const sparkAt = currentAutoAtMs - TIMING.noMoveNoCastLeadMs;
       const active = this.state.activeCast;
       const activeCastBlocksAuto =
-        active !== null && active.startedAtMs <= sparkAt && active.completesAtMs > sparkAt;
+        active !== null && active.startedAtMs <= sparkAt && active.completesAtMs - sparkAt > TIMING_EPSILON_MS;
 
       this.emitAutoWindupIfDue(currentAutoAtMs);
 
       if (activeCastBlocksAuto) {
-        this.log.add({
-          type: "auto-clipped",
-          atMs: currentAutoAtMs,
-          ability: "autoShot",
-          reason: "casting-at-spark",
-        });
-        this.rescheduleNextAuto(this.state.nextAutoAtMs + active.completesAtMs - sparkAt);
+        this.rescheduleDelayedAuto(this.state.nextAutoAtMs + active.completesAtMs - sparkAt, "casting-at-spark");
       } else {
-        this.log.add({ type: "auto-fire", atMs: currentAutoAtMs, ability: "autoShot" });
+        this.logAutoFire(currentAutoAtMs);
         this.rescheduleNextAuto(this.state.nextAutoAtMs + this.preset.targetRangedSwingMs);
       }
 
@@ -265,6 +280,50 @@ export class Simulator {
 
     this.log.add({ type: "auto-windup", atMs: windupAtMs, ability: "autoShot" });
     this.autoWindupLoggedForAutoAtMs = autoAtMs;
+  }
+
+  private rescheduleDelayedAuto(rescheduledAtMs: number, reason: AutoDelayReason): void {
+    const originalAtMs = this.state.nextAutoAtMs;
+    const delayMs = rescheduledAtMs - originalAtMs;
+    if (delayMs <= 0) {
+      return;
+    }
+
+    this.log.add({
+      type: "auto-clipped",
+      atMs: originalAtMs,
+      ability: "autoShot",
+      reason,
+      detail: reason,
+      originalAtMs,
+    });
+    this.pendingAutoDelay = { originalAtMs, reason };
+    this.rescheduleNextAuto(rescheduledAtMs);
+  }
+
+  private logAutoFire(atMs: number): void {
+    const pending = this.pendingAutoDelay;
+    if (pending !== null) {
+      this.log.add({
+        type: "auto-fire",
+        atMs,
+        ability: "autoShot",
+        originalAtMs: pending.originalAtMs,
+        rescheduledAtMs: atMs,
+        delayMs: Math.round(atMs - pending.originalAtMs),
+      });
+      this.pendingAutoDelay = null;
+      return;
+    }
+
+    this.log.add({
+      type: "auto-fire",
+      atMs,
+      ability: "autoShot",
+      originalAtMs: atMs,
+      rescheduledAtMs: atMs,
+      delayMs: 0,
+    });
   }
 
   private rescheduleNextAuto(nextAutoAtMs: number): void {

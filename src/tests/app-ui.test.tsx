@@ -1,16 +1,54 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { ComponentProps } from "react";
 import { App } from "../App";
 import { playAttackSoundsForEvents, preloadAttackSounds } from "../audio/attackSounds";
 import { playSuccessChime } from "../audio/successChime";
 import { TIMING } from "../data/constants";
 import { getRotationPreset } from "../data/rotations";
 import { expandRotationPattern } from "../sim/timeline";
-import type { SimEvent } from "../sim/types";
+import type { PracticeState, SimEvent } from "../sim/types";
 import { EventLogPanel } from "../ui/EventLogPanel";
 
 const KEYBINDINGS_STORAGE_KEY = "melee-weaving-practice.keybindings.v1";
+
+const phaserHostTestHooks = vi.hoisted(() => ({
+  getPracticeState: null as null | (() => PracticeState),
+}));
+
+vi.mock("../game/PhaserHost", async () => {
+  const React = await vi.importActual<typeof import("react")>("react");
+  const { attachBrowserInput } = await vi.importActual<typeof import("../input/browserInput")>("../input/browserInput");
+
+  return {
+    PhaserHost(props: ComponentProps<typeof import("../game/PhaserHost").PhaserHost>) {
+      const parentRef = React.useRef<HTMLDivElement | null>(null);
+      phaserHostTestHooks.getPracticeState = props.getPracticeState;
+
+      React.useEffect(() => {
+        const parent = parentRef.current;
+        if (!parent) {
+          return undefined;
+        }
+
+        parent.focus();
+        return attachBrowserInput(document, props.getKeybindings, {
+          onMovementChange: props.onMovementChange,
+          onAbilityPress: props.onAbilityPress,
+        });
+      }, [props.getKeybindings, props.onAbilityPress, props.onMovementChange]);
+
+      return React.createElement("div", {
+        ref: parentRef,
+        className: "phaser-host",
+        "data-testid": "phaser-host",
+        "data-ideal-count": props.ideal.length,
+        tabIndex: 0,
+      });
+    },
+  };
+});
 
 vi.mock("../audio/attackSounds", () => ({
   preloadAttackSounds: vi.fn(),
@@ -26,6 +64,7 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  phaserHostTestHooks.getPracticeState = null;
 });
 
 describe("App UI", () => {
@@ -52,16 +91,18 @@ describe("App UI", () => {
     expect(screen.getByLabelText("Rotation")).toBeInTheDocument();
     expect(screen.getByText("Reference Rotation")).toBeInTheDocument();
     expect(screen.getByText("Diziet rotationtools")).toBeInTheDocument();
-    expect(screen.getByText("Efficiency")).toBeInTheDocument();
+    expect(screen.queryByText("Efficiency")).not.toBeInTheDocument();
+    expect(screen.getByText("Auto delay")).toBeInTheDocument();
+    expect(screen.getByText("Weave time")).toBeInTheDocument();
     expect(screen.getByText("Queue window")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reset Log" })).toBeInTheDocument();
   });
 
-  it("starts with a neutral score before any session events", () => {
+  it("starts with quiet timing metric placeholders before any session events", () => {
     render(<App />);
 
-    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.getAllByText("--ms").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("No mistakes recorded")).toBeInTheDocument();
   });
 
@@ -93,7 +134,9 @@ describe("App UI", () => {
       atMs: expectedAutoWindupAtMs,
       ability: "autoShot",
     });
-    expect(forwardedEvents).toContainEqual({ type: "auto-fire", atMs: expectedAutoFireAtMs, ability: "autoShot" });
+    expect(forwardedEvents).toContainEqual(
+      expect.objectContaining({ type: "auto-fire", atMs: expectedAutoFireAtMs, ability: "autoShot" }),
+    );
   });
 
   it("does not replay already processed attack events across later state updates", () => {
@@ -150,8 +193,64 @@ describe("App UI", () => {
       atMs: expectedAutoWindupAtMs,
       ability: "autoShot",
     });
-    expect(forwardedEvents).toContainEqual({ type: "auto-fire", atMs: expectedAutoFireAtMs, ability: "autoShot" });
+    expect(forwardedEvents).toContainEqual(
+      expect.objectContaining({ type: "auto-fire", atMs: expectedAutoFireAtMs, ability: "autoShot" }),
+    );
     expect(forwardedEvents).not.toContainEqual({ type: "ability-press", atMs: 1800, ability: "steadyShot" });
+  });
+
+  it("syncs movement blocking into the simulator and records a moving Auto delay", () => {
+    const now = vi.spyOn(performance, "now");
+    const preset = getRotationPreset("one-one");
+    const autoDue = preset.targetRangedSwingMs;
+    const spark = autoDue - TIMING.noMoveNoCastLeadMs;
+    const stopMovingAtMs = autoDue + 250;
+
+    now.mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText("Rotation"), { target: { value: "one-one" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    now.mockReturnValue(spark);
+    fireEvent.keyDown(document, { code: "KeyW" });
+    now.mockReturnValue(stopMovingAtMs);
+    fireEvent.keyUp(document, { code: "KeyW" });
+
+    const eventLog = within(screen.getByRole("region", { name: "Event Log" }));
+    const clippedRow = eventLog
+      .getAllByRole("listitem")
+      .find((row) => within(row).queryByText("auto-clipped") !== null);
+
+    expect(clippedRow).toBeDefined();
+    expect(within(clippedRow!).getByText("moving")).toBeInTheDocument();
+  });
+
+  it("publishes passive Auto delay events to the side panel while still running", () => {
+    const now = vi.spyOn(performance, "now");
+    const preset = getRotationPreset("one-one");
+    const sparkAtMs = preset.targetRangedSwingMs - TIMING.noMoveNoCastLeadMs;
+
+    now.mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText("Rotation"), { target: { value: "one-one" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    now.mockReturnValue(sparkAtMs - 650);
+    fireEvent.keyDown(document, { code: "Digit4" });
+    now.mockReturnValue(preset.targetRangedSwingMs + 250);
+    act(() => {
+      phaserHostTestHooks.getPracticeState?.();
+    });
+
+    const eventLog = within(screen.getByRole("region", { name: "Event Log" }));
+    const clippedRow = eventLog
+      .getAllByRole("listitem")
+      .find((row) => within(row).queryByText("auto-clipped") !== null);
+
+    expect(clippedRow).toBeDefined();
+    expect(within(clippedRow!).getByText("casting-at-spark")).toBeInTheDocument();
+    expect(screen.getByText("Running")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
   });
 
   it("toggles running status and start stop disabled states", () => {

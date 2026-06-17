@@ -238,7 +238,9 @@ describe("scoring", () => {
     sim.tick(preset.targetRangedSwingMs);
     const result = scoreEvents(ideal.slice(0, 1), sim.getLog());
 
-    expect(sim.getLog()).toContainEqual({ type: "auto-fire", atMs: ideal[0].idealAtMs, ability: "autoShot" });
+    expect(sim.getLog()).toContainEqual(
+      expect.objectContaining({ type: "auto-fire", atMs: ideal[0].idealAtMs, ability: "autoShot" }),
+    );
     expect(result.mistakes).toEqual([]);
     expect(result.efficiency).toBe(100);
   });

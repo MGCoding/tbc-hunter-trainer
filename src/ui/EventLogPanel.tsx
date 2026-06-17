@@ -28,6 +28,7 @@ export function EventLogPanel({ events, onReset }: EventLogPanelProps) {
               <time>{formatEventTime(event.atMs)}</time>
               <span>{event.type}</span>
               {event.ability ? <strong>{event.ability}</strong> : null}
+              {event.detail ? <span>{event.detail}</span> : null}
             </li>
           ))}
         </ol>

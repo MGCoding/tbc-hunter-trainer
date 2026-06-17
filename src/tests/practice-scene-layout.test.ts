@@ -12,8 +12,11 @@ import {
   calculatePracticeLayout,
   calculateTimelineRailLayout,
   canDrawPracticeField,
+  formatHudMetricMs,
+  formatLastAutoDelayLabel,
   getAbilityIconViews,
   getCastBarDisplay,
+  getLastAutoDelayColor,
   getMeleeBarColor,
   getPracticeGridStep,
   getTimelineEventX,
@@ -90,6 +93,39 @@ describe("PracticeScene layout", () => {
 
     expect(layout.hud.iconTop).toBeGreaterThan(rangedBottom);
     expect(layout.hud.iconTop + layout.hud.iconSize).toBeLessThanOrEqual(layout.hud.top + layout.hud.totalHeight);
+  });
+
+  it("uses taller timing bars and reserves space for HUD timing metrics", () => {
+    const layout = calculatePracticeLayout(900, 800);
+    const compact = calculatePracticeLayout(320, 260);
+
+    expect(layout.hud.castHeight).toBe(22);
+    expect(layout.hud.barHeight).toBe(16);
+    expect(layout.hud.metricHeight).toBe(28);
+    expect(compact.hud.castHeight).toBe(14);
+    expect(compact.hud.barHeight).toBe(10);
+    expect(compact.hud.metricHeight).toBe(24);
+    expect(layout.hud.iconTop).toBeGreaterThan(
+      layout.hud.top +
+        layout.hud.castHeight +
+        layout.hud.gap +
+        layout.hud.barHeight +
+        layout.hud.gap +
+        layout.hud.barHeight +
+        layout.hud.gap +
+        layout.hud.metricHeight,
+    );
+  });
+
+  it("formats HUD timing metric values and Auto delay labels", () => {
+    expect(formatHudMetricMs(null)).toBe("--ms");
+    expect(formatHudMetricMs(86.4)).toBe("86ms");
+    expect(formatLastAutoDelayLabel(null)).toBe("");
+    expect(formatLastAutoDelayLabel(0)).toBe("0ms");
+    expect(formatLastAutoDelayLabel(142.2)).toBe("+142ms");
+    expect(getLastAutoDelayColor(null)).toBe(0xf5df9f);
+    expect(getLastAutoDelayColor(199)).toBe(0xf5df9f);
+    expect(getLastAutoDelayColor(200)).toBe(0xd9664f);
   });
 
   it("pins the timeline rail to the right side and above the bottom HUD when space allows", () => {

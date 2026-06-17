@@ -107,12 +107,17 @@ export type SimEventType =
   | "range-change"
   | "score";
 
+export type AutoDelayReason = "casting-at-spark" | "moving" | "range-blocked";
+
 export interface SimEvent {
   type: SimEventType;
   atMs: number;
   ability?: AbilityId;
   reason?: string;
   detail?: string;
+  delayMs?: number;
+  originalAtMs?: number;
+  rescheduledAtMs?: number;
 }
 
 export interface ActiveCast {
@@ -131,13 +136,38 @@ export interface SimulatorState {
   queuedAbility: AbilityId | null;
   autoPaused?: boolean;
   autoRangeBlocked?: boolean;
+  autoMovementBlocked?: boolean;
   abilityReadyAtMs?: Partial<Record<AbilityId, number>>;
+}
+
+export interface AutoDelaySample {
+  atMs: number;
+  delayMs: number;
+  reason: AutoDelayReason | "not-delayed";
+  originalAtMs: number;
+  rescheduledAtMs: number;
+}
+
+export interface WeaveTimeSample {
+  startAtMs: number;
+  meleeAtMs: number;
+  closeAtMs: number;
+  durationMs: number;
+}
+
+export interface TimingMetrics {
+  autoDelayAverageMs: number | null;
+  lastAutoDelayMs: number | null;
+  weaveAverageMs: number | null;
+  autoDelaySamples: AutoDelaySample[];
+  weaveSamples: WeaveTimeSample[];
 }
 
 export interface PracticeState {
   simulator: SimulatorState;
   position: PracticePosition;
   range: RangeState;
+  metrics: TimingMetrics;
 }
 
 export interface ScoreMistake {

@@ -47,7 +47,14 @@ describe("simulator", () => {
 
     sim.tick(windupAtMs);
     expect(sim.getLog()).toContainEqual({ type: "auto-windup", atMs: windupAtMs, ability: "autoShot" });
-    expect(sim.getLog()).not.toContainEqual({ type: "auto-fire", atMs: preset.targetRangedSwingMs, ability: "autoShot" });
+    expect(
+      sim
+        .getLog()
+        .some(
+          (event) =>
+            event.type === "auto-fire" && event.atMs === preset.targetRangedSwingMs && event.ability === "autoShot",
+        ),
+    ).toBe(false);
 
     sim.tick(windupAtMs + 10);
     expect(sim.getLog().filter((event) => event.type === "auto-windup")).toHaveLength(1);
@@ -167,11 +174,11 @@ describe("simulator", () => {
       atMs: restoreAtMs,
       ability: "autoShot",
     });
-    expect(sim.getLog()).toContainEqual({
+    expect(sim.getLog()).toContainEqual(expect.objectContaining({
       type: "auto-fire",
       atMs: restoreAtMs + windupMs,
       ability: "autoShot",
-    });
+    }));
   });
 
   it("does not resume a manually paused Auto Shot when ranged attacks are restored", () => {
@@ -213,11 +220,11 @@ describe("simulator", () => {
       atMs: resumeAtMs,
       ability: "autoShot",
     });
-    expect(sim.getLog()).toContainEqual({
+    expect(sim.getLog()).toContainEqual(expect.objectContaining({
       type: "auto-fire",
       atMs: resumeAtMs + windupMs,
       ability: "autoShot",
-    });
+    }));
   });
 
   it.each(["arcaneShot", "multiShot", "steadyShot"] as const)(
@@ -258,13 +265,17 @@ describe("simulator", () => {
     sim.tick(autoDue);
 
     expect(sim.getLog()).toContainEqual({ type: "auto-windup", atMs: windupAtMs, ability: "autoShot" });
-    expect(sim.getLog()).toContainEqual({
+    expect(sim.getLog()).toContainEqual(expect.objectContaining({
       type: "auto-clipped",
       atMs: autoDue,
       ability: "autoShot",
       reason: "casting-at-spark",
-    });
-    expect(sim.getLog()).not.toContainEqual({ type: "auto-fire", atMs: autoDue, ability: "autoShot" });
+    }));
+    expect(
+      sim
+        .getLog()
+        .some((event) => event.type === "auto-fire" && event.atMs === autoDue && event.ability === "autoShot"),
+    ).toBe(false);
   });
 
   it("clips Auto Shot when queued Multi-Shot is active at the no-move/no-cast spark", () => {
@@ -290,6 +301,303 @@ describe("simulator", () => {
     sim.tick(autoDue);
     const timestamps = sim.getLog().map((event) => event.atMs);
     expect(timestamps).toEqual([...timestamps].sort((a, b) => a - b));
+  });
+
+  it("records delay metadata when a cast clips Auto Shot", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+    const autoDue = sim.getState().nextAutoAtMs;
+    const spark = autoDue - TIMING.noMoveNoCastLeadMs;
+    const castStartedAtMs = spark - 100;
+    const expectedRescheduledAtMs = autoDue + TIMING.steadyBaseCastMs / preset.hasteFactor - 100;
+
+    sim.pressAbility("steadyShot", castStartedAtMs);
+    sim.tick(autoDue);
+
+    const clipped = sim.getLog().find((event) => event.type === "auto-clipped" && event.reason === "casting-at-spark");
+
+    expect(clipped).toMatchObject({
+      type: "auto-clipped",
+      atMs: autoDue,
+      ability: "autoShot",
+      reason: "casting-at-spark",
+      originalAtMs: autoDue,
+    });
+    expect(clipped?.rescheduledAtMs).toBeUndefined();
+    expect(clipped?.delayMs).toBeUndefined();
+
+    sim.tick(expectedRescheduledAtMs);
+
+    const delayedFire = sim.getLog().find((event) => event.type === "auto-fire" && event.originalAtMs === autoDue);
+    expect(delayedFire).toMatchObject({
+      type: "auto-fire",
+      ability: "autoShot",
+      originalAtMs: autoDue,
+      delayMs: Math.round(expectedRescheduledAtMs - autoDue),
+    });
+    expect(delayedFire?.atMs).toBeCloseTo(expectedRescheduledAtMs);
+  });
+
+  it("preserves fractional positive cast delays below half a millisecond", () => {
+    const preset = {
+      ...getRotationPreset("one-one"),
+      targetRangedSwingMs: 3000,
+      hasteFactor: 1,
+      derivedMeleeSwingMs: 3500,
+    };
+    const sim = createSimulator(preset);
+    const autoDue = sim.getState().nextAutoAtMs;
+    const spark = autoDue - TIMING.noMoveNoCastLeadMs;
+    const rawDelayMs = 0.4;
+    const castStartedAtMs = spark + rawDelayMs - TIMING.steadyBaseCastMs / preset.hasteFactor;
+    const expectedRescheduledAtMs = autoDue + rawDelayMs;
+
+    sim.pressAbility("steadyShot", castStartedAtMs);
+    sim.tick(autoDue);
+
+    const clipped = sim.getLog().find((event) => event.type === "auto-clipped" && event.reason === "casting-at-spark");
+
+    expect(sim.getState().nextAutoAtMs).toBeCloseTo(expectedRescheduledAtMs);
+    expect(sim.getState().nextAutoAtMs).not.toBe(autoDue + preset.targetRangedSwingMs);
+    expect(clipped).toMatchObject({
+      type: "auto-clipped",
+      atMs: autoDue,
+      ability: "autoShot",
+      reason: "casting-at-spark",
+      originalAtMs: autoDue,
+    });
+    expect(clipped?.delayMs).toBeUndefined();
+    expect(clipped?.rescheduledAtMs).toBeUndefined();
+
+    sim.tick(expectedRescheduledAtMs);
+
+    const delayedFire = sim.getLog().find((event) => event.type === "auto-fire" && event.originalAtMs === autoDue);
+    expect(delayedFire).toMatchObject({
+      type: "auto-fire",
+      ability: "autoShot",
+      originalAtMs: autoDue,
+      delayMs: Math.round(rawDelayMs),
+    });
+    expect(delayedFire?.atMs).toBeCloseTo(expectedRescheduledAtMs);
+  });
+
+  it("records zero delay metadata for clean Auto Shot fires", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+    const autoDue = sim.getState().nextAutoAtMs;
+
+    sim.tick(autoDue);
+
+    expect(sim.getLog()).toContainEqual({
+      type: "auto-fire",
+      atMs: autoDue,
+      ability: "autoShot",
+      originalAtMs: autoDue,
+      rescheduledAtMs: autoDue,
+      delayMs: 0,
+    });
+  });
+
+  it("records moving Auto Shot delay when movement blocks the spark", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+    const autoDue = sim.getState().nextAutoAtMs;
+    const spark = autoDue - TIMING.noMoveNoCastLeadMs;
+    const stoppedAtMs = autoDue + 250;
+    const expectedRescheduledAtMs = stoppedAtMs + TIMING.autoWindupMs / preset.hasteFactor;
+
+    sim.setAutoShotMovementAllowed(false, spark);
+    sim.tick(stoppedAtMs);
+    sim.setAutoShotMovementAllowed(true, stoppedAtMs);
+
+    expect(sim.getLog()).toContainEqual({
+      type: "auto-clipped",
+      atMs: autoDue,
+      ability: "autoShot",
+      reason: "moving",
+      detail: "moving",
+      originalAtMs: autoDue,
+    });
+    expect(sim.getLog().find((event) => event.type === "auto-clipped" && event.reason === "moving")?.delayMs).toBeUndefined();
+    expect(sim.getState().nextAutoAtMs).toBeCloseTo(expectedRescheduledAtMs);
+
+    sim.tick(expectedRescheduledAtMs);
+
+    expect(sim.getLog()).toContainEqual(expect.objectContaining({
+      type: "auto-fire",
+      atMs: expectedRescheduledAtMs,
+      ability: "autoShot",
+      originalAtMs: autoDue,
+      delayMs: Math.round(expectedRescheduledAtMs - autoDue),
+    }));
+  });
+
+  it("does not record moving Auto Shot delay or move Auto earlier when movement restores at the spark", () => {
+    const sim = createSimulator(getRotationPreset("one-one"));
+    const autoDue = sim.getState().nextAutoAtMs;
+    const spark = autoDue - TIMING.noMoveNoCastLeadMs;
+
+    sim.setAutoShotMovementAllowed(false, spark);
+    sim.setAutoShotMovementAllowed(true, spark);
+
+    expect(sim.getLog().some((event) => event.type === "auto-clipped" && event.reason === "moving")).toBe(false);
+    expect(sim.getState().nextAutoAtMs).toBe(autoDue);
+  });
+
+  it("fires a due Auto Shot before starting movement block after the shot is due", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+    const autoDue = sim.getState().nextAutoAtMs;
+
+    sim.setAutoShotMovementAllowed(false, autoDue + 1);
+
+    expect(sim.getLog()).toContainEqual(expect.objectContaining({ type: "auto-fire", atMs: autoDue, ability: "autoShot" }));
+    expect(sim.getState().nextAutoAtMs).toBeCloseTo(autoDue + preset.targetRangedSwingMs);
+    expect(sim.getState().autoMovementBlocked).toBe(true);
+  });
+
+  it("waits for movement to restore before rescheduling Auto Shot when range restores first", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+    const autoDue = sim.getState().nextAutoAtMs;
+    const spark = autoDue - TIMING.noMoveNoCastLeadMs;
+    const rangeRestoredAtMs = autoDue + 100;
+    const movementRestoredAtMs = autoDue + 250;
+    const expectedRescheduledAtMs = movementRestoredAtMs + TIMING.autoWindupMs / preset.hasteFactor;
+
+    sim.setAutoShotRangeAllowed(false, spark);
+    sim.setAutoShotMovementAllowed(false, spark);
+    sim.setAutoShotRangeAllowed(true, rangeRestoredAtMs);
+
+    expect(sim.getLog().filter((event) => event.type === "auto-clipped")).toHaveLength(0);
+    expect(sim.getState().nextAutoAtMs).toBe(autoDue);
+
+    sim.setAutoShotMovementAllowed(true, movementRestoredAtMs);
+
+    const clipped = sim.getLog().filter((event) => event.type === "auto-clipped");
+    expect(clipped).toHaveLength(1);
+    expect(clipped[0]).toMatchObject({
+      type: "auto-clipped",
+      atMs: autoDue,
+      ability: "autoShot",
+      reason: "moving",
+      originalAtMs: autoDue,
+    });
+    expect(clipped[0]?.delayMs).toBeUndefined();
+    expect(clipped[0]?.rescheduledAtMs).toBeUndefined();
+    expect(sim.getState().nextAutoAtMs).toBeCloseTo(expectedRescheduledAtMs);
+
+    sim.tick(expectedRescheduledAtMs);
+
+    expect(sim.getLog()).toContainEqual(expect.objectContaining({
+      type: "auto-fire",
+      atMs: expectedRescheduledAtMs,
+      ability: "autoShot",
+      originalAtMs: autoDue,
+      delayMs: Math.round(expectedRescheduledAtMs - autoDue),
+    }));
+  });
+
+  it("records range-blocked Auto Shot delay only when range pushes the shot back", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+    const autoDue = sim.getState().nextAutoAtMs;
+    const spark = autoDue - TIMING.noMoveNoCastLeadMs;
+    const restoredAtMs = autoDue + 300;
+    const expectedRescheduledAtMs = restoredAtMs + TIMING.autoWindupMs / preset.hasteFactor;
+
+    sim.setAutoShotRangeAllowed(false, spark - 200);
+    sim.setAutoShotRangeAllowed(true, spark - 100);
+    expect(sim.getLog().some((event) => event.type === "auto-clipped" && event.reason === "range-blocked")).toBe(false);
+
+    sim.setAutoShotRangeAllowed(false, spark);
+    sim.tick(restoredAtMs);
+    sim.setAutoShotRangeAllowed(true, restoredAtMs);
+
+    expect(sim.getLog()).toContainEqual({
+      type: "auto-clipped",
+      atMs: autoDue,
+      ability: "autoShot",
+      reason: "range-blocked",
+      detail: "range-blocked",
+      originalAtMs: autoDue,
+    });
+
+    sim.tick(expectedRescheduledAtMs);
+
+    expect(sim.getLog()).toContainEqual(expect.objectContaining({
+      type: "auto-fire",
+      atMs: expectedRescheduledAtMs,
+      ability: "autoShot",
+      originalAtMs: autoDue,
+      delayMs: Math.round(expectedRescheduledAtMs - autoDue),
+    }));
+  });
+
+  it("does not record range-blocked Auto Shot delay or move Auto earlier when range restores at the spark", () => {
+    const sim = createSimulator(getRotationPreset("one-one"));
+    const autoDue = sim.getState().nextAutoAtMs;
+    const spark = autoDue - TIMING.noMoveNoCastLeadMs;
+
+    sim.setAutoShotRangeAllowed(false, spark);
+    sim.setAutoShotRangeAllowed(true, spark);
+
+    expect(sim.getLog().some((event) => event.type === "auto-clipped" && event.reason === "range-blocked")).toBe(false);
+    expect(sim.getState().nextAutoAtMs).toBe(autoDue);
+  });
+
+  it("fires a due Auto Shot before starting range block after the shot is due", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+    const autoDue = sim.getState().nextAutoAtMs;
+
+    sim.setAutoShotRangeAllowed(false, autoDue + 1);
+
+    expect(sim.getLog()).toContainEqual(expect.objectContaining({ type: "auto-fire", atMs: autoDue, ability: "autoShot" }));
+    expect(sim.getState().nextAutoAtMs).toBeCloseTo(autoDue + preset.targetRangedSwingMs);
+    expect(sim.getState().autoRangeBlocked).toBe(true);
+  });
+
+  it("waits for range to restore before rescheduling Auto Shot when movement restores first", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+    const autoDue = sim.getState().nextAutoAtMs;
+    const spark = autoDue - TIMING.noMoveNoCastLeadMs;
+    const movementRestoredAtMs = autoDue + 100;
+    const rangeRestoredAtMs = autoDue + 250;
+    const expectedRescheduledAtMs = rangeRestoredAtMs + TIMING.autoWindupMs / preset.hasteFactor;
+
+    sim.setAutoShotRangeAllowed(false, spark);
+    sim.setAutoShotMovementAllowed(false, spark);
+    sim.setAutoShotMovementAllowed(true, movementRestoredAtMs);
+
+    expect(sim.getLog().filter((event) => event.type === "auto-clipped")).toHaveLength(0);
+    expect(sim.getState().nextAutoAtMs).toBe(autoDue);
+
+    sim.setAutoShotRangeAllowed(true, rangeRestoredAtMs);
+
+    const clipped = sim.getLog().filter((event) => event.type === "auto-clipped");
+    expect(clipped).toHaveLength(1);
+    expect(clipped[0]).toMatchObject({
+      type: "auto-clipped",
+      atMs: autoDue,
+      ability: "autoShot",
+      reason: "range-blocked",
+      originalAtMs: autoDue,
+    });
+    expect(clipped[0]?.delayMs).toBeUndefined();
+    expect(clipped[0]?.rescheduledAtMs).toBeUndefined();
+    expect(sim.getState().nextAutoAtMs).toBeCloseTo(expectedRescheduledAtMs);
+
+    sim.tick(expectedRescheduledAtMs);
+
+    expect(sim.getLog()).toContainEqual(expect.objectContaining({
+      type: "auto-fire",
+      atMs: expectedRescheduledAtMs,
+      ability: "autoShot",
+      originalAtMs: autoDue,
+      delayMs: Math.round(expectedRescheduledAtMs - autoDue),
+    }));
   });
 
   it("enforces Arcane Shot and Multi-Shot cooldowns", () => {

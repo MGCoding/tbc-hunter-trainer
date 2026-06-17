@@ -43,7 +43,9 @@ describe("session flow", () => {
     expect(state.nowMs).toBe(2_600);
     expect(state.activeCast).toBeNull();
     expect(sim.getLog()).toContainEqual({ type: "cast-complete", atMs: completesAtMs, ability: "steadyShot" });
-    expect(sim.getLog()).toContainEqual({ type: "auto-fire", atMs: firstAutoAtMs, ability: "autoShot" });
+    expect(sim.getLog()).toContainEqual(
+      expect.objectContaining({ type: "auto-fire", atMs: firstAutoAtMs, ability: "autoShot" }),
+    );
   });
 
   it("discards deferred simulator events when resetting during a running session", () => {

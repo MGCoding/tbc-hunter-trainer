@@ -89,6 +89,7 @@ interface HudLayout {
   width: number;
   castHeight: number;
   barHeight: number;
+  metricHeight: number;
   iconTop: number;
   iconSize: number;
   iconGap: number;
@@ -166,6 +167,23 @@ function remainingProgress(nowMs: number, nextAtMs: number, durationMs: number):
 function formatCooldown(remainingMs: number): string {
   const seconds = Math.max(0, remainingMs) / 1000;
   return seconds >= 10 ? `${Math.ceil(seconds)}` : seconds.toFixed(1);
+}
+
+export function formatHudMetricMs(value: number | null): string {
+  return value === null ? "--ms" : `${Math.round(value)}ms`;
+}
+
+export function formatLastAutoDelayLabel(value: number | null): string {
+  if (value === null) {
+    return "";
+  }
+
+  const rounded = Math.round(value);
+  return rounded > 0 ? `+${rounded}ms` : "0ms";
+}
+
+export function getLastAutoDelayColor(value: number | null): number {
+  return value !== null && value >= 200 ? 0xd9664f : 0xf5df9f;
 }
 
 function getAbilityReadyAtMs(action: AbilityActionId, state: SimulatorState): number {
@@ -260,15 +278,19 @@ export function calculatePracticeLayout(width: number, height: number): Practice
   const playerRadius = clamp(yardPx * 0.42, 9, MAX_PLAYER_RADIUS);
   const compactHud = height < 320 || width < 360;
   const barWidth = Math.min(compactHud ? 220 : MAX_BAR_WIDTH, Math.max(148, width - 40));
-  const castHeight = compactHud ? 12 : 18;
-  const barHeight = compactHud ? 8 : 14;
+  const castHeight = compactHud ? 14 : 22;
+  const barHeight = compactHud ? 10 : 16;
+  const metricHeight = compactHud ? 24 : 28;
   const iconSize = compactHud ? 28 : 36;
   const iconGap = compactHud ? 5 : 7;
   const gap = compactHud ? 4 : 8;
-  const totalHeight = castHeight + gap + barHeight + gap + barHeight + gap + iconSize;
+  const totalHeight = castHeight + gap + barHeight + gap + barHeight + gap + metricHeight + gap + iconSize;
   const bottomMargin = 8;
   const preferredTop = height / 2 + playerRadius + (compactHud ? 20 : 54);
-  const top = clamp(preferredTop, bottomMargin, Math.max(bottomMargin, height - bottomMargin - totalHeight));
+  const top =
+    height <= totalHeight + bottomMargin
+      ? 0
+      : clamp(preferredTop, bottomMargin, Math.max(bottomMargin, height - bottomMargin - totalHeight));
   const rangedTop = top + castHeight + gap + barHeight + gap;
 
   return {
@@ -283,7 +305,8 @@ export function calculatePracticeLayout(width: number, height: number): Practice
       width: barWidth,
       castHeight,
       barHeight,
-      iconTop: rangedTop + barHeight + gap,
+      metricHeight,
+      iconTop: rangedTop + barHeight + gap + metricHeight + gap,
       iconSize,
       iconGap,
       gap,
@@ -445,6 +468,9 @@ export class PracticeScene extends Phaser.Scene {
   private field!: Phaser.GameObjects.Graphics;
   private hud!: Phaser.GameObjects.Graphics;
   private castLabel!: Phaser.GameObjects.Text;
+  private autoDelayMetricLabel!: Phaser.GameObjects.Text;
+  private weaveMetricLabel!: Phaser.GameObjects.Text;
+  private lastAutoDelayLabel!: Phaser.GameObjects.Text;
   private distanceLabel!: Phaser.GameObjects.Text;
   private abilityIcons: AbilityIconObject[] = [];
   private timelineIcons: TimelineIconObject[] = [];
@@ -472,6 +498,7 @@ export class PracticeScene extends Phaser.Scene {
           activeCast: null,
           queuedAbility: null,
           autoPaused: false,
+          autoMovementBlocked: false,
         },
         this.preset,
         this.getKeybindings(),
@@ -502,6 +529,35 @@ export class PracticeScene extends Phaser.Scene {
         fontFamily: "Inter, Arial, sans-serif",
         fontSize: "11px",
         fontStyle: "700",
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+    this.lastAutoDelayLabel = this.add
+      .text(0, 0, "", {
+        color: "#f5df9f",
+        fontFamily: "Inter, Arial, sans-serif",
+        fontSize: "10px",
+        fontStyle: "900",
+        stroke: "#080b0e",
+        strokeThickness: 3,
+      })
+      .setOrigin(1, 0.5)
+      .setScrollFactor(0);
+    this.autoDelayMetricLabel = this.add
+      .text(0, 0, "", {
+        color: "#f4f2ed",
+        fontFamily: "Inter, Arial, sans-serif",
+        fontSize: "10px",
+        fontStyle: "800",
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0);
+    this.weaveMetricLabel = this.add
+      .text(0, 0, "", {
+        color: "#f4f2ed",
+        fontFamily: "Inter, Arial, sans-serif",
+        fontSize: "10px",
+        fontStyle: "800",
       })
       .setOrigin(0.5)
       .setScrollFactor(0);
@@ -661,6 +717,8 @@ export class PracticeScene extends Phaser.Scene {
     const rangedProgress = remainingProgress(state.nowMs, state.nextAutoAtMs, this.preset.targetRangedSwingMs);
     this.drawBar(hud.left, rangedTop, hud.width, hud.barHeight, rangedProgress, 0x7e9dbc, 0.92);
     this.drawRangedSparks(hud.left, rangedTop, hud.width, hud.barHeight, state);
+    this.drawLastAutoDelayLabel(hud, rangedTop, practiceState.metrics.lastAutoDelayMs);
+    this.drawHudMetrics(hud, rangedTop + hud.barHeight + hud.gap, practiceState.metrics);
     this.drawAbilityIcons(hud, getAbilityIconViews(state, this.preset, this.getKeybindings()));
     this.drawTimelineRail(state);
   }
@@ -697,6 +755,34 @@ export class PracticeScene extends Phaser.Scene {
 
       this.hud.lineStyle(2, spark.color, isPassed ? spark.alpha * 0.55 : spark.alpha);
       this.hud.lineBetween(sparkX, y - 3, sparkX, y + height + 3);
+    }
+  }
+
+  private drawLastAutoDelayLabel(hud: HudLayout, rangedTop: number, lastAutoDelayMs: number | null): void {
+    const label = formatLastAutoDelayLabel(lastAutoDelayMs);
+    this.lastAutoDelayLabel.setText(label);
+    this.lastAutoDelayLabel.setColor(`#${getLastAutoDelayColor(lastAutoDelayMs).toString(16).padStart(6, "0")}`);
+    this.lastAutoDelayLabel.setPosition(hud.left + hud.width - 6, rangedTop + hud.barHeight / 2);
+    this.lastAutoDelayLabel.setVisible(label.length > 0);
+  }
+
+  private drawHudMetrics(hud: HudLayout, metricTop: number, metrics: PracticeState["metrics"]): void {
+    const cellGap = 6;
+    const cellWidth = (hud.width - cellGap) / 2;
+    const labels = [
+      { text: `Auto avg ${formatHudMetricMs(metrics.autoDelayAverageMs)}`, object: this.autoDelayMetricLabel },
+      { text: `Weave avg ${formatHudMetricMs(metrics.weaveAverageMs)}`, object: this.weaveMetricLabel },
+    ];
+
+    for (let index = 0; index < labels.length; index += 1) {
+      const x = hud.left + index * (cellWidth + cellGap);
+      this.hud.fillStyle(0x080b0e, 0.68);
+      this.hud.fillRoundedRect(x, metricTop, cellWidth, hud.metricHeight, 4);
+      this.hud.lineStyle(1, 0xf4f2ed, 0.16);
+      this.hud.strokeRoundedRect(x, metricTop, cellWidth, hud.metricHeight, 4);
+      labels[index].object.setText(labels[index].text);
+      labels[index].object.setPosition(x + cellWidth / 2, metricTop + hud.metricHeight / 2);
+      labels[index].object.setFontSize(hud.metricHeight < 28 ? 9 : 10);
     }
   }
 

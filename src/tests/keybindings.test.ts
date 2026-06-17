@@ -65,6 +65,103 @@ describe("browser input adapter", () => {
     cleanup();
   });
 
+  it("moves forward while left and right mouse buttons are held together", () => {
+    const target = new EventTarget();
+    const onMovementChange = vi.fn();
+    const cleanup = attachBrowserInput(target, DEFAULT_KEYBINDS, {
+      onMovementChange,
+      onAbilityPress: vi.fn(),
+    });
+
+    target.dispatchEvent(new MouseEvent("mousedown", { button: 0, cancelable: true }));
+    target.dispatchEvent(new MouseEvent("mousedown", { button: 2, cancelable: true }));
+    target.dispatchEvent(new MouseEvent("mouseup", { button: 0, cancelable: true }));
+
+    expect(onMovementChange).toHaveBeenNthCalledWith(1, {
+      forward: true,
+      backward: false,
+      left: false,
+      right: false,
+    });
+    expect(onMovementChange).toHaveBeenNthCalledWith(2, {
+      forward: false,
+      backward: false,
+      left: false,
+      right: false,
+    });
+    expect(onMovementChange).toHaveBeenCalledTimes(2);
+
+    cleanup();
+  });
+
+  it("keeps keyboard forward active after releasing mouse-forward movement", () => {
+    const target = new EventTarget();
+    const onMovementChange = vi.fn();
+    const cleanup = attachBrowserInput(target, DEFAULT_KEYBINDS, {
+      onMovementChange,
+      onAbilityPress: vi.fn(),
+    });
+
+    target.dispatchEvent(new MouseEvent("mousedown", { button: 0, cancelable: true }));
+    target.dispatchEvent(new MouseEvent("mousedown", { button: 2, cancelable: true }));
+    expect(onMovementChange).toHaveBeenNthCalledWith(1, {
+      forward: true,
+      backward: false,
+      left: false,
+      right: false,
+    });
+    expect(onMovementChange).toHaveBeenCalledTimes(1);
+
+    target.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyW", cancelable: true }));
+    target.dispatchEvent(new MouseEvent("mouseup", { button: 2, cancelable: true }));
+
+    expect(onMovementChange).toHaveBeenCalledTimes(1);
+
+    target.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyW", cancelable: true }));
+
+    expect(onMovementChange).toHaveBeenNthCalledWith(2, {
+      forward: false,
+      backward: false,
+      left: false,
+      right: false,
+    });
+    expect(onMovementChange).toHaveBeenCalledTimes(2);
+
+    cleanup();
+  });
+
+  it("suppresses the browser context menu while mouse-forward is active", () => {
+    const target = new EventTarget();
+    const cleanup = attachBrowserInput(target, DEFAULT_KEYBINDS, {
+      onMovementChange: vi.fn(),
+      onAbilityPress: vi.fn(),
+    });
+    const contextMenuEvent = new MouseEvent("contextmenu", { button: 2, cancelable: true });
+
+    target.dispatchEvent(new MouseEvent("mousedown", { button: 0, cancelable: true }));
+    target.dispatchEvent(new MouseEvent("mousedown", { button: 2, cancelable: true }));
+    target.dispatchEvent(contextMenuEvent);
+
+    expect(contextMenuEvent.defaultPrevented).toBe(true);
+
+    cleanup();
+  });
+
+  it("allows standalone right-click context menus", () => {
+    const target = new EventTarget();
+    const cleanup = attachBrowserInput(target, DEFAULT_KEYBINDS, {
+      onMovementChange: vi.fn(),
+      onAbilityPress: vi.fn(),
+    });
+    const contextMenuEvent = new MouseEvent("contextmenu", { button: 2, cancelable: true });
+
+    target.dispatchEvent(contextMenuEvent);
+
+    expect(contextMenuEvent.defaultPrevented).toBe(false);
+
+    cleanup();
+  });
+
   it("suppresses repeated keyboard ability presses", () => {
     const target = new EventTarget();
     const onAbilityPress = vi.fn();

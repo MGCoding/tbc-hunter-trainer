@@ -73,6 +73,12 @@ export function attachBrowserInput(
   bindingsOrGetBindings: KeybindingSource,
   handlers: BrowserInputHandlers,
 ): () => void {
+  const keyboardMovementKeys: MovementKeys = {
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+  };
   const movementKeys: MovementKeys = {
     forward: false,
     backward: false,
@@ -80,14 +86,48 @@ export function attachBrowserInput(
     right: false,
   };
   const activeMovementByCode = new Map<string, keyof MovementKeys>();
+  const pressedMouseButtons = new Set<number>();
+  let mouseForward = false;
 
-  const setMovement = (key: keyof MovementKeys, pressed: boolean): void => {
-    if (movementKeys[key] === pressed) {
+  const emitMovementIfChanged = (): void => {
+    const nextMovementKeys: MovementKeys = {
+      ...keyboardMovementKeys,
+      forward: keyboardMovementKeys.forward || mouseForward,
+    };
+
+    if (
+      movementKeys.forward === nextMovementKeys.forward &&
+      movementKeys.backward === nextMovementKeys.backward &&
+      movementKeys.left === nextMovementKeys.left &&
+      movementKeys.right === nextMovementKeys.right
+    ) {
       return;
     }
 
-    movementKeys[key] = pressed;
+    movementKeys.forward = nextMovementKeys.forward;
+    movementKeys.backward = nextMovementKeys.backward;
+    movementKeys.left = nextMovementKeys.left;
+    movementKeys.right = nextMovementKeys.right;
     handlers.onMovementChange({ ...movementKeys });
+  };
+
+  const setKeyboardMovement = (key: keyof MovementKeys, pressed: boolean): void => {
+    if (keyboardMovementKeys[key] === pressed) {
+      return;
+    }
+
+    keyboardMovementKeys[key] = pressed;
+    emitMovementIfChanged();
+  };
+
+  const syncMouseForward = (): void => {
+    const nextMouseForward = pressedMouseButtons.has(0) && pressedMouseButtons.has(2);
+    if (mouseForward === nextMouseForward) {
+      return;
+    }
+
+    mouseForward = nextMouseForward;
+    emitMovementIfChanged();
   };
 
   const handleKeyDown = (event: Event): void => {
@@ -113,7 +153,7 @@ export function attachBrowserInput(
       }
 
       activeMovementByCode.set(event.code, movementKey);
-      setMovement(movementKey, true);
+      setKeyboardMovement(movementKey, true);
       return;
     }
 
@@ -131,7 +171,7 @@ export function attachBrowserInput(
     if (activeMovementKey !== undefined) {
       event.preventDefault();
       activeMovementByCode.delete(event.code);
-      setMovement(activeMovementKey, false);
+      setKeyboardMovement(activeMovementKey, false);
       return;
     }
 
@@ -149,13 +189,18 @@ export function attachBrowserInput(
     const movementKey = movementKeyForAction(action);
     if (movementKey !== null) {
       activeMovementByCode.delete(event.code);
-      setMovement(movementKey, false);
+      setKeyboardMovement(movementKey, false);
     }
   };
 
   const handleMouseDown = (event: Event): void => {
     if (!(event instanceof MouseEvent)) {
       return;
+    }
+
+    if (event.button === 0 || event.button === 2) {
+      pressedMouseButtons.add(event.button);
+      syncMouseForward();
     }
 
     const action = findActionForBinding(getBindings(bindingsOrGetBindings), makeMouseBinding(event));
@@ -170,13 +215,38 @@ export function attachBrowserInput(
     }
   };
 
+  const handleMouseUp = (event: Event): void => {
+    if (!(event instanceof MouseEvent)) {
+      return;
+    }
+
+    if (event.button === 0 || event.button === 2) {
+      pressedMouseButtons.delete(event.button);
+      syncMouseForward();
+    }
+  };
+
+  const handleContextMenu = (event: Event): void => {
+    if (!(event instanceof MouseEvent)) {
+      return;
+    }
+
+    if (mouseForward) {
+      event.preventDefault();
+    }
+  };
+
   target.addEventListener("keydown", handleKeyDown);
   target.addEventListener("keyup", handleKeyUp);
   target.addEventListener("mousedown", handleMouseDown);
+  target.addEventListener("mouseup", handleMouseUp);
+  target.addEventListener("contextmenu", handleContextMenu);
 
   return () => {
     target.removeEventListener("keydown", handleKeyDown);
     target.removeEventListener("keyup", handleKeyUp);
     target.removeEventListener("mousedown", handleMouseDown);
+    target.removeEventListener("mouseup", handleMouseUp);
+    target.removeEventListener("contextmenu", handleContextMenu);
   };
 }

@@ -80,6 +80,7 @@ export function App() {
   const [running, setRunning] = useState(false);
   const [keybindings, setKeybindings] = useState<KeybindingMap>(DEFAULT_KEYBINDS);
   const [captureAction, setCaptureAction] = useState<ActionId | null>(null);
+  const [macroKillCommandIntoRaptorStrike, setMacroKillCommandIntoRaptorStrike] = useState(false);
 
   const preset = useMemo(() => getRotationPreset(selectedPresetId), [selectedPresetId]);
   const simulatorRef = useRef<Simulator | null>(null);
@@ -89,10 +90,12 @@ export function App() {
   const movementKeysRef = useRef<MovementKeys>({ ...EMPTY_MOVEMENT_KEYS });
   const movementUpdatedAtMsRef = useRef(0);
   const keybindingsRef = useRef<KeybindingMap>(keybindings);
+  const macroKillCommandIntoRaptorStrikeRef = useRef(macroKillCommandIntoRaptorStrike);
   const perfectPressKeysRef = useRef<Set<string>>(new Set());
   const processedAttackSoundEventsRef = useRef<Map<string, number>>(new Map());
   runningRef.current = running;
   keybindingsRef.current = keybindings;
+  macroKillCommandIntoRaptorStrikeRef.current = macroKillCommandIntoRaptorStrike;
 
   if (simulatorRef.current === null) {
     simulatorRef.current = createSimulator(preset);
@@ -255,24 +258,30 @@ export function App() {
 
       const { elapsedMs: atMs, range } = syncLiveStateToNow(performance.now());
       const simulator = getSimulator();
-      const timing = getAbilityTiming(action, preset);
-      if ((timing.requiresMelee && !range.canMelee) || (timing.requiresRanged && !range.canUseRanged)) {
-        simulator.recordInvalidInput(action, atMs, "out-of-range");
-        playNewAttackSoundEvents();
-        setEvents(simulator.getLog());
-        return;
+      const actionsToPress: AbilityActionId[] =
+        action === "raptorStrike" && macroKillCommandIntoRaptorStrikeRef.current
+          ? ["killCommand", "raptorStrike"]
+          : [action];
+
+      for (const actionToPress of actionsToPress) {
+        const timing = getAbilityTiming(actionToPress, preset);
+        if ((timing.requiresMelee && !range.canMelee) || (timing.requiresRanged && !range.canUseRanged)) {
+          simulator.recordInvalidInput(actionToPress, atMs, "out-of-range");
+          continue;
+        }
+
+        const perfectPress = findPerfectPress(ideal, actionToPress, atMs);
+        const perfectPressKey = perfectPress ? describePerfectPressKey(perfectPress) : null;
+        const logLengthBeforePress = simulator.getLog().length;
+        simulator.pressAbility(actionToPress, atMs);
+        const newLogEntries = simulator.getLog().slice(logLengthBeforePress);
+        const inputWasInvalid = newLogEntries.some((event) => event.type === "invalid-input" && event.atMs === atMs);
+        if (perfectPressKey !== null && !inputWasInvalid && !perfectPressKeysRef.current.has(perfectPressKey)) {
+          perfectPressKeysRef.current.add(perfectPressKey);
+          playSuccessChime();
+        }
       }
 
-      const perfectPress = findPerfectPress(ideal, action, atMs);
-      const perfectPressKey = perfectPress ? describePerfectPressKey(perfectPress) : null;
-      const logLengthBeforePress = simulator.getLog().length;
-      simulator.pressAbility(action, atMs);
-      const newLogEntries = simulator.getLog().slice(logLengthBeforePress);
-      const inputWasInvalid = newLogEntries.some((event) => event.type === "invalid-input" && event.atMs === atMs);
-      if (perfectPressKey !== null && !inputWasInvalid && !perfectPressKeysRef.current.has(perfectPressKey)) {
-        perfectPressKeysRef.current.add(perfectPressKey);
-        playSuccessChime();
-      }
       playNewAttackSoundEvents();
       setEvents(simulator.getLog());
     },
@@ -355,6 +364,14 @@ export function App() {
             <h2 id="keybindings-panel-title">Keybindings</h2>
             {captureAction ? <span className="status-pill is-running">Listening</span> : null}
           </div>
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              checked={macroKillCommandIntoRaptorStrike}
+              onChange={(event) => setMacroKillCommandIntoRaptorStrike(event.currentTarget.checked)}
+            />
+            <span>Macro Kill Command into Raptor Strike</span>
+          </label>
           <div className="keybinding-list">
             {KEYBINDING_ROWS.map(({ action, label }) => (
               <div className="keybinding-row" key={action}>

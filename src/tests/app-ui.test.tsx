@@ -26,6 +26,12 @@ afterEach(() => {
 });
 
 describe("App UI", () => {
+  const chronologicalAbilityPressNames = () =>
+    [...within(screen.getByRole("region", { name: "Event Log" })).getAllByRole("listitem")]
+      .reverse()
+      .filter((row) => within(row).queryByText("ability-press") !== null)
+      .map((row) => within(row).getByText(/^[a-z][A-Za-z]+$/, { selector: "strong" }).textContent ?? "");
+
   it("renders trainer controls and reference panels", () => {
     render(<App />);
 
@@ -315,6 +321,78 @@ describe("App UI", () => {
 
     expect(screen.getByText("cast-start")).toBeInTheDocument();
     expect(screen.getAllByText("raptorStrike").length).toBeGreaterThan(0);
+    expect(screen.queryByText("invalid-input")).not.toBeInTheDocument();
+  });
+
+  it("renders the Raptor Strike macro option off by default", () => {
+    render(<App />);
+
+    expect(screen.getByRole("checkbox", { name: "Macro Kill Command into Raptor Strike" })).not.toBeChecked();
+  });
+
+  it("attempts Kill Command before Raptor Strike from the Raptor Strike binding when the macro is enabled", () => {
+    const now = vi.spyOn(performance, "now");
+    now.mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Macro Kill Command into Raptor Strike" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
+    fireEvent.keyDown(document, { code: "KeyW" });
+    now.mockReturnValue(100);
+    fireEvent.keyUp(document, { code: "KeyW" });
+    now.mockReturnValue(2_600);
+    fireEvent.mouseDown(document, { button: 3 });
+
+    const abilityPressNames = chronologicalAbilityPressNames();
+
+    expect(abilityPressNames.slice(0, 2)).toEqual(["killCommand", "raptorStrike"]);
+  });
+
+  it("keeps Kill Command input from attempting Raptor Strike when the macro is enabled", () => {
+    vi.spyOn(performance, "now").mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Macro Kill Command into Raptor Strike" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
+    fireEvent.keyDown(document, { code: "Digit2" });
+
+    const abilityPressNames = chronologicalAbilityPressNames();
+
+    expect(abilityPressNames).toContain("killCommand");
+    expect(abilityPressNames).not.toContain("raptorStrike");
+  });
+
+  it("preserves Raptor Strike-only input while the macro is disabled", () => {
+    vi.spyOn(performance, "now").mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
+    fireEvent.mouseDown(document, { button: 3 });
+
+    const abilityPressNames = chronologicalAbilityPressNames();
+
+    expect(abilityPressNames).toContain("raptorStrike");
+    expect(abilityPressNames).not.toContain("killCommand");
+  });
+
+  it("keeps held movement input releasable after toggling the Raptor Strike macro option", () => {
+    const now = vi.spyOn(performance, "now");
+    now.mockReturnValue(0);
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
+    fireEvent.keyDown(document, { code: "KeyW" });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Macro Kill Command into Raptor Strike" }));
+    now.mockReturnValue(50);
+    fireEvent.keyUp(document, { code: "KeyW" });
+    now.mockReturnValue(200);
+    fireEvent.keyDown(document, { code: "Digit1" });
+
+    expect(screen.getAllByText("arcaneShot").length).toBeGreaterThan(0);
     expect(screen.queryByText("invalid-input")).not.toBeInTheDocument();
   });
 

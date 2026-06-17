@@ -67,6 +67,14 @@ Append these tests inside the existing `describe("browser input adapter", () => 
 
     target.dispatchEvent(new MouseEvent("mousedown", { button: 0, cancelable: true }));
     target.dispatchEvent(new MouseEvent("mousedown", { button: 2, cancelable: true }));
+    expect(onMovementChange).toHaveBeenNthCalledWith(1, {
+      forward: true,
+      backward: false,
+      left: false,
+      right: false,
+    });
+    expect(onMovementChange).toHaveBeenCalledTimes(1);
+
     target.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyW", cancelable: true }));
     target.dispatchEvent(new MouseEvent("mouseup", { button: 2, cancelable: true }));
 
@@ -74,12 +82,6 @@ Append these tests inside the existing `describe("browser input adapter", () => 
 
     target.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyW", cancelable: true }));
 
-    expect(onMovementChange).toHaveBeenNthCalledWith(1, {
-      forward: true,
-      backward: false,
-      left: false,
-      right: false,
-    });
     expect(onMovementChange).toHaveBeenNthCalledWith(2, {
       forward: false,
       backward: false,

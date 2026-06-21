@@ -508,7 +508,7 @@ export class PracticeScene extends Phaser.Scene {
           nowMs: 0,
           gcdReadyAtMs: 0,
           nextAutoAtMs: this.preset.targetRangedSwingMs,
-          nextMeleeAtMs: this.preset.derivedMeleeSwingMs,
+          nextMeleeAtMs: 0,
           raptorReadyAtMs: 0,
           activeCast: null,
           queuedAbility: null,

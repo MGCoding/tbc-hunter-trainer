@@ -49,11 +49,114 @@ describe("rotation presets", () => {
   });
 
   it("derives haste factor from ranged weapon speed and target effective speed", () => {
-    const preset = getRotationPreset("french-weaving-5511-3w");
+    const preset = getRotationPreset("french-5511");
     expect(preset.rangedWeaponSpeedMs).toBe(3000);
-    expect(preset.targetRangedSwingMs).toBeCloseTo(2070.393374741201, 3);
-    expect(preset.hasteFactor).toBeCloseTo(1.449, 3);
-    expect(preset.derivedMeleeSwingMs).toBeCloseTo(2415.459, 3);
+    expect(preset.targetRangedSwingMs).toBeCloseTo(2173.913043478261, 3);
+    expect(preset.hasteFactor).toBeCloseTo(1.38, 3);
+    expect(preset.meleeHasteFactor).toBeCloseTo(preset.hasteFactor, 3);
+    expect(preset.derivedMeleeSwingMs).toBeCloseTo(2536.232, 3);
+  });
+
+  it("uses the Diziet source haste profiles for basic turret rotations", () => {
+    const sourceProfiles = [
+      {
+        id: "one-one",
+        rangedHasteFactor: 1.05 * 1.2 * 1.15 * 1.15,
+      },
+      {
+        id: "one-two",
+        rangedHasteFactor: 1.3 * 1.3 * 1.2 * 1.15 * 1.15 * 1.3,
+      },
+      {
+        id: "one-three",
+        rangedHasteFactor: 1.3 * 2 * 1.2 * 1.15 * 1.15 * 1.3,
+      },
+    ];
+
+    for (const sourceProfile of sourceProfiles) {
+      const preset = getRotationPreset(sourceProfile.id);
+      expect(preset.rangedWeaponSpeedMs).toBe(3000);
+      expect(preset.hasteFactor).toBeCloseTo(sourceProfile.rangedHasteFactor, 3);
+      expect(preset.targetRangedSwingMs).toBeCloseTo(3000 / sourceProfile.rangedHasteFactor, 3);
+    }
+  });
+
+  it("uses the Diziet source haste profiles for complex and combined ranged rotations", () => {
+    const sourceProfiles = [
+      {
+        id: "short-french-5411",
+        rangedHasteFactor: 1.15,
+      },
+      {
+        id: "french-5511",
+        rangedHasteFactor: 1.2 * 1.15,
+      },
+      {
+        id: "long-french-5611",
+        rangedHasteFactor: 1.05 * 1.2 * 1.15 * 1.15,
+      },
+      {
+        id: "skipping-5911",
+        rangedHasteFactor: 1.05 * 1.2 * 1.15 * 1.5 * 1.15,
+      },
+      {
+        id: "two-three",
+        rangedHasteFactor: 3.25,
+      },
+      {
+        id: "two-five",
+        rangedHasteFactor: 1.05 * 1.2 * 1.15 * 1.5 * 1.3 * 1.15 * 1.5,
+      },
+    ];
+
+    for (const sourceProfile of sourceProfiles) {
+      const preset = getRotationPreset(sourceProfile.id);
+      expect(preset.rangedWeaponSpeedMs).toBe(3000);
+      expect(preset.hasteFactor).toBeCloseTo(sourceProfile.rangedHasteFactor, 3);
+      expect(preset.targetRangedSwingMs).toBeCloseTo(3000 / sourceProfile.rangedHasteFactor, 3);
+    }
+  });
+
+  it("uses the Diziet melee-weaving source weapon speeds and separate melee haste factors", () => {
+    expect(getRotationPreset("french-5511").rangedWeaponSpeedMs).toBe(3000);
+
+    const sourceProfiles = [
+      {
+        id: "french-weaving-5511-3w",
+        rangedHasteFactor: 1.05 * 1.2 * 1.15,
+        meleeHasteFactor: 1.05,
+      },
+      {
+        id: "half-weave-22-1w",
+        rangedHasteFactor: 1.05 * 1.2 * 1.15 * 1.15,
+        meleeHasteFactor: 1.05,
+      },
+      {
+        id: "weaving-6911-3w",
+        rangedHasteFactor: 1.05 * 1.2 * 1.15 * 1.5,
+        meleeHasteFactor: 1.05,
+      },
+      {
+        id: "weaving-61111-3w",
+        rangedHasteFactor: 1.05 * 1.2 * 1.15 * 1.15 * 1.5,
+        meleeHasteFactor: 1.05,
+      },
+      {
+        id: "weaving-37-2w",
+        rangedHasteFactor: 1.3 * 1.55 * 1.2 * 1.15 * 1.15 * 1.3,
+        meleeHasteFactor: 1.3 * 1.55,
+      },
+    ];
+
+    for (const sourceProfile of sourceProfiles) {
+      const preset = getRotationPreset(sourceProfile.id);
+      expect(preset.rangedWeaponSpeedMs).toBe(2900);
+      expect(preset.meleeBaseSwingMs).toBe(3700);
+      expect(preset.hasteFactor).toBeCloseTo(sourceProfile.rangedHasteFactor, 3);
+      expect(preset.meleeHasteFactor).toBeCloseTo(sourceProfile.meleeHasteFactor, 3);
+      expect(preset.targetRangedSwingMs).toBeCloseTo(2900 / sourceProfile.rangedHasteFactor, 3);
+      expect(preset.derivedMeleeSwingMs).toBeCloseTo(3700 / sourceProfile.meleeHasteFactor, 3);
+    }
   });
 
   it("uses only supported rotation pattern tokens", () => {

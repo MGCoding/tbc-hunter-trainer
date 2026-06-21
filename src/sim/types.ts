@@ -22,6 +22,7 @@ export interface RotationPreset {
   targetRangedSwingMs: number;
   hasteFactor: number;
   meleeBaseSwingMs: number;
+  meleeHasteFactor: number;
   derivedMeleeSwingMs: number;
 }
 

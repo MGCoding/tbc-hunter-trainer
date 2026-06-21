@@ -95,11 +95,24 @@ describe("simulator", () => {
     });
   });
 
-  it("does not fire Raptor Strike before the melee swing is ready", () => {
+  it("starts with the opening melee swing ready for the first weave", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+
+    sim.pressAbility("raptorStrike", 0);
+
+    expect(sim.getLog()).toContainEqual({ type: "cast-start", atMs: 0, ability: "raptorStrike" });
+    expect(sim.getState().nextMeleeAtMs).toBe(preset.derivedMeleeSwingMs);
+  });
+
+  it("does not fire a second melee action before the melee swing is ready again", () => {
     const preset = getRotationPreset("one-one");
     const sim = createSimulator(preset);
     const earlyAtMs = preset.derivedMeleeSwingMs - 100;
 
+    sim.pressAbility("raptorStrike", 0);
+    sim.pressAbility("autoShot", 0);
+    sim.resetLog();
     sim.pressAbility("raptorStrike", earlyAtMs);
 
     expect(sim.getLog()).not.toContainEqual({ type: "cast-start", atMs: earlyAtMs, ability: "raptorStrike" });
@@ -347,7 +360,7 @@ describe("simulator", () => {
   });
 
   it("clips Auto Shot when queued Multi-Shot is active at the no-move/no-cast spark", () => {
-    const sim = createSimulator(getRotationPreset("one-one"));
+    const sim = createSimulator(getRotationPreset("french-5511"));
     const autoDue = sim.getState().nextAutoAtMs;
     sim.pressAbility("steadyShot", 0);
     sim.pressAbility("multiShot", 1450);
@@ -362,7 +375,7 @@ describe("simulator", () => {
   });
 
   it("keeps log events in non-decreasing timestamp order for queued Multi-Shot clipping", () => {
-    const sim = createSimulator(getRotationPreset("one-one"));
+    const sim = createSimulator(getRotationPreset("french-5511"));
     const autoDue = sim.getState().nextAutoAtMs;
     sim.pressAbility("steadyShot", 0);
     sim.pressAbility("multiShot", 1450);

@@ -23,7 +23,7 @@ export class Simulator {
       nowMs: 0,
       gcdReadyAtMs: 0,
       nextAutoAtMs: preset.targetRangedSwingMs,
-      nextMeleeAtMs: preset.derivedMeleeSwingMs,
+      nextMeleeAtMs: 0,
       raptorReadyAtMs: 0,
       activeCast: null,
       queuedAbility: null,

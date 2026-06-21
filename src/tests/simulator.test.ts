@@ -233,6 +233,8 @@ describe("simulator", () => {
       const preset = getRotationPreset("one-one");
       const sim = createSimulator(preset);
       const windupMs = 500 / preset.hasteFactor;
+      const castMs = ability === "arcaneShot" ? 0 : ability === "multiShot" ? TIMING.multiBaseCastMs / preset.hasteFactor : TIMING.steadyBaseCastMs / preset.hasteFactor;
+      const restartLeadMs = castMs > 0 ? TIMING.noMoveNoCastLeadMs : windupMs;
 
       sim.pressAbility("raptorStrike", preset.derivedMeleeSwingMs);
       const resumeAtMs = sim.getState().nextAutoAtMs + 750;
@@ -241,10 +243,76 @@ describe("simulator", () => {
 
       expect(sim.getLog()).toContainEqual({ type: "auto-resumed", atMs: resumeAtMs, ability: "autoShot" });
       expect(sim.getState().autoPaused).toBe(false);
-      expect(sim.getState().nextAutoAtMs).toBeCloseTo(resumeAtMs + windupMs);
+      expect(sim.getState().nextAutoAtMs).toBeCloseTo(resumeAtMs + castMs + restartLeadMs);
       expect(sim.getLog()).toContainEqual({ type: "cast-start", atMs: resumeAtMs, ability });
     },
   );
+
+  it("does not fire a restarted Auto Shot while Steady Shot is still casting", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+    const windupMs = 500 / preset.hasteFactor;
+
+    sim.pressAbility("raptorStrike", preset.derivedMeleeSwingMs);
+    const steadyAtMs = sim.getState().nextAutoAtMs + 750;
+    const steadyCompletesAtMs = steadyAtMs + TIMING.steadyBaseCastMs / preset.hasteFactor;
+    sim.tick(steadyAtMs);
+    sim.pressAbility("steadyShot", steadyAtMs);
+
+    sim.tick(steadyAtMs + windupMs);
+
+    expect(
+      sim
+        .getLog()
+        .some((event) => event.type === "auto-fire" && event.atMs >= steadyAtMs && event.atMs < steadyCompletesAtMs),
+    ).toBe(false);
+    expect(
+      sim
+        .getLog()
+        .some((event) => event.type === "auto-windup" && event.atMs >= steadyAtMs && event.atMs < steadyCompletesAtMs),
+    ).toBe(false);
+
+    sim.tick(steadyCompletesAtMs);
+    sim.tick(steadyCompletesAtMs + TIMING.noMoveNoCastLeadMs);
+
+    expect(sim.getLog()).toContainEqual({
+      type: "auto-windup",
+      atMs: steadyCompletesAtMs + TIMING.noMoveNoCastLeadMs - windupMs,
+      ability: "autoShot",
+    });
+    expect(sim.getLog()).toContainEqual(expect.objectContaining({
+      type: "auto-fire",
+      atMs: steadyCompletesAtMs + TIMING.noMoveNoCastLeadMs,
+      ability: "autoShot",
+    }));
+  });
+
+  it("starts Auto Shot when queued Steady Shot begins after Auto Shot was paused", () => {
+    const preset = getRotationPreset("one-one");
+    const sim = createSimulator(preset);
+
+    sim.pressAbility("steadyShot", preset.derivedMeleeSwingMs - 100);
+    sim.pressAbility("raptorStrike", preset.derivedMeleeSwingMs);
+    const queuedAtMs = sim.getState().gcdReadyAtMs - 50;
+    const startsAtMs = sim.getState().gcdReadyAtMs;
+    const completesAtMs = startsAtMs + TIMING.steadyBaseCastMs / preset.hasteFactor;
+    const windupMs = 500 / preset.hasteFactor;
+
+    sim.pressAbility("steadyShot", queuedAtMs);
+    sim.tick(startsAtMs);
+
+    expect(sim.getLog()).toContainEqual({ type: "queued", atMs: queuedAtMs, ability: "steadyShot" });
+    expect(sim.getLog()).toContainEqual({ type: "auto-resumed", atMs: startsAtMs, ability: "autoShot" });
+    expect(sim.getState().autoPaused).toBe(false);
+    expect(sim.getState().nextAutoAtMs).toBeCloseTo(completesAtMs + TIMING.noMoveNoCastLeadMs);
+    expect(sim.getLog()).toContainEqual({ type: "cast-start", atMs: startsAtMs, ability: "steadyShot" });
+
+    sim.tick(startsAtMs + windupMs);
+
+    expect(
+      sim.getLog().some((event) => event.type === "auto-fire" && event.atMs >= startsAtMs && event.atMs < completesAtMs),
+    ).toBe(false);
+  });
 
   it("clips Auto Shot when Multi-Shot is still casting at no-move/no-cast spark", () => {
     const sim = createSimulator(getRotationPreset("french-weaving-5511-3w"));

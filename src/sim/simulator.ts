@@ -130,7 +130,7 @@ export class Simulator {
     }
 
     if (RANGED_ATTACK_ABILITIES.has(ability)) {
-      this.resumeAutoShot(atMs);
+      this.resumeAutoShot(atMs, this.getRestartedAutoAtMs(ability, atMs));
     }
 
     this.startCast(ability, atMs);
@@ -157,8 +157,17 @@ export class Simulator {
 
       const queued = this.state.queuedAbility;
       this.state.queuedAbility = null;
+      if (RANGED_ATTACK_ABILITIES.has(queued)) {
+        this.resumeAutoShot(queuedAtMs, this.getRestartedAutoAtMs(queued, queuedAtMs));
+      }
       this.startCast(queued, queuedAtMs);
     }
+  }
+
+  private getRestartedAutoAtMs(ability: AbilityId, atMs: number): number {
+    const timing = getAbilityTiming(ability, this.preset);
+    const restartLeadMs = timing.castMs > 0 ? TIMING.noMoveNoCastLeadMs : TIMING.autoWindupMs / this.preset.hasteFactor;
+    return atMs + timing.castMs + restartLeadMs;
   }
 
   private resolveMeleeAction(atMs: number): void {
@@ -210,14 +219,14 @@ export class Simulator {
     this.log.add({ type: "auto-paused", atMs, ability: "autoShot" });
   }
 
-  private resumeAutoShot(atMs: number): void {
+  private resumeAutoShot(atMs: number, rescheduledAtMs = atMs + TIMING.autoWindupMs / this.preset.hasteFactor): void {
     if (!this.state.autoPaused) {
       return;
     }
 
     const sparkAtMs = this.state.nextAutoAtMs - TIMING.noMoveNoCastLeadMs;
     if (atMs >= sparkAtMs) {
-      this.rescheduleNextAuto(atMs + TIMING.autoWindupMs / this.preset.hasteFactor);
+      this.rescheduleNextAuto(rescheduledAtMs);
     }
 
     this.state.autoPaused = false;

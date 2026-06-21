@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { MOVEMENT } from "../data/constants";
 import { createInitialPosition, getRangeState, updateMovement } from "../sim/movement";
 
+const TBC_BACKWARD_YARDS_PER_SECOND = 4.5;
+
 describe("movement", () => {
   it("starts the target 2.5 yards away by default", () => {
     const start = createInitialPosition();
@@ -15,7 +17,7 @@ describe("movement", () => {
     expect(forward.player.y).toBeCloseTo(start.player.y - MOVEMENT.yardsPerSecond);
 
     const back = updateMovement(start, { forward: false, backward: true, left: false, right: false }, 1000);
-    expect(back.player.y).toBeCloseTo(start.player.y + MOVEMENT.yardsPerSecond);
+    expect(back.player.y).toBeCloseTo(start.player.y + TBC_BACKWARD_YARDS_PER_SECOND);
 
     const left = updateMovement(start, { forward: false, backward: false, left: true, right: false }, 1000);
     expect(left.player.x).toBeCloseTo(start.player.x - MOVEMENT.strafeYardsPerSecond);
@@ -27,6 +29,14 @@ describe("movement", () => {
     const distanceTraveled = Math.hypot(updated.player.x - start.player.x, updated.player.y - start.player.y);
 
     expect(distanceTraveled).toBeCloseTo(MOVEMENT.yardsPerSecond);
+  });
+
+  it("normalizes diagonal backward movement to the configured backward speed", () => {
+    const start = createInitialPosition(MOVEMENT.startingDistanceYards);
+    const updated = updateMovement(start, { forward: false, backward: true, left: true, right: false }, 1000);
+    const distanceTraveled = Math.hypot(updated.player.x - start.player.x, updated.player.y - start.player.y);
+
+    expect(distanceTraveled).toBeCloseTo(TBC_BACKWARD_YARDS_PER_SECOND);
   });
 
   it("returns an immutable target snapshot when movement updates", () => {

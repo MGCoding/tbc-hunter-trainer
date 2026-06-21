@@ -15,6 +15,7 @@ export const TIMING = {
 
 export const MOVEMENT = {
   yardsPerSecond: 7,
+  backwardYardsPerSecond: 4.5,
   strafeYardsPerSecond: 7,
   meleeRangeYards: 2,
   minimumRangedRangeYards: 2,

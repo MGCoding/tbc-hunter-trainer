@@ -150,7 +150,8 @@ describe("App UI", () => {
     render(<App />);
 
     expect(screen.getAllByText("--ms").length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText("No mistakes recorded")).toBeInTheDocument();
+    expect(screen.queryByText("Latest mistake")).not.toBeInTheDocument();
+    expect(screen.queryByText("No mistakes recorded")).not.toBeInTheDocument();
   });
 
   it("preloads attack sounds once on app load", () => {
@@ -477,23 +478,22 @@ describe("App UI", () => {
     now.mockReturnValue(2_600);
     fireEvent.mouseDown(document, { button: 3 });
 
-    expect(screen.getByText("cast-start")).toBeInTheDocument();
+    expect(screen.getAllByText("cast-start").length).toBeGreaterThan(0);
     expect(screen.getAllByText("raptorStrike").length).toBeGreaterThan(0);
     expect(screen.queryByText("invalid-input")).not.toBeInTheDocument();
   });
 
-  it("renders the Raptor Strike macro option off by default", () => {
+  it("renders the Raptor Strike macro option on by default", () => {
     render(<App />);
 
-    expect(screen.getByRole("checkbox", { name: "Macro Kill Command into Raptor Strike" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Macro Kill Command into Raptor Strike" })).toBeChecked();
   });
 
-  it("attempts Kill Command before Raptor Strike from the Raptor Strike binding when the macro is enabled", () => {
+  it("attempts Kill Command before Raptor Strike from the Raptor Strike binding by default", () => {
     const now = vi.spyOn(performance, "now");
     now.mockReturnValue(0);
     render(<App />);
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "Macro Kill Command into Raptor Strike" }));
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
     fireEvent.keyDown(document, { code: "KeyW" });
@@ -511,7 +511,6 @@ describe("App UI", () => {
     vi.spyOn(performance, "now").mockReturnValue(0);
     render(<App />);
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "Macro Kill Command into Raptor Strike" }));
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
     fireEvent.keyDown(document, { code: "Digit2" });
@@ -522,10 +521,11 @@ describe("App UI", () => {
     expect(abilityPressNames).not.toContain("raptorStrike");
   });
 
-  it("preserves Raptor Strike-only input while the macro is disabled", () => {
+  it("preserves Raptor Strike-only input when the macro is disabled", () => {
     vi.spyOn(performance, "now").mockReturnValue(0);
     render(<App />);
 
+    fireEvent.click(screen.getByRole("checkbox", { name: "Macro Kill Command into Raptor Strike" }));
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
     fireEvent.mouseDown(document, { button: 3 });
@@ -558,6 +558,7 @@ describe("App UI", () => {
     vi.spyOn(performance, "now").mockReturnValue(0);
     render(<App />);
 
+    fireEvent.click(screen.getByRole("checkbox", { name: "Macro Kill Command into Raptor Strike" }));
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
     fireEvent.click(screen.getByRole("button", { name: "Reset Log" }));
     fireEvent.mouseDown(document, { button: 3 });

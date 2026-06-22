@@ -106,7 +106,7 @@ export function App() {
     typeof window === "undefined" ? 1 : getEffectiveRenderScale("auto", window.devicePixelRatio),
   );
   const [captureAction, setCaptureAction] = useState<ActionId | null>(null);
-  const [macroKillCommandIntoRaptorStrike, setMacroKillCommandIntoRaptorStrike] = useState(false);
+  const [macroKillCommandIntoRaptorStrike, setMacroKillCommandIntoRaptorStrike] = useState(true);
 
   const preset = useMemo(() => getRotationPreset(selectedPresetId), [selectedPresetId]);
   const simulatorRef = useRef<Simulator | null>(null);

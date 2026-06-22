@@ -38,7 +38,6 @@ export function ControlPanel({
   onStart,
   onStop,
 }: ControlPanelProps) {
-  const latestMistake = score.mistakes.at(-1);
   const effectiveAutoScale = getEffectiveRenderScale("auto", devicePixelRatio);
 
   return (
@@ -94,11 +93,6 @@ export function ControlPanel({
           <span>Queue window</span>
           <strong>{TIMING.spellQueueWindowMs}ms</strong>
         </div>
-      </div>
-
-      <div className="latest-mistake">
-        <span>Latest mistake</span>
-        <strong>{latestMistake ? latestMistake.label : "No mistakes recorded"}</strong>
       </div>
 
       <div className="button-row">

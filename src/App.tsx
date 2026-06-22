@@ -42,6 +42,7 @@ import {
 import { ControlPanel } from "./ui/ControlPanel";
 import { EventLogPanel } from "./ui/EventLogPanel";
 import { ReferencePanel } from "./ui/ReferencePanel";
+import { WalkthroughTour } from "./ui/WalkthroughTour";
 
 const DEFAULT_PRESET_ID = "french-weaving-5511-3w";
 const EMPTY_MOVEMENT_KEYS: MovementKeys = {
@@ -449,7 +450,7 @@ export function App() {
 
   return (
     <main className="app-shell">
-      <section className="practice-stage" aria-label="Practice field">
+      <section className="practice-stage" aria-label="Practice field" data-tour-target="practice-hud">
         <PhaserHost
           preset={preset}
           ideal={ideal}
@@ -473,7 +474,12 @@ export function App() {
           onStart={handleStart}
           onStop={handleStop}
         />
-        <section className="panel" aria-labelledby="keybindings-panel-title">
+        <section
+          className="panel"
+          aria-labelledby="keybindings-panel-title"
+          role="region"
+          data-tour-target="keybindings"
+        >
           <div className="panel-header">
             <h2 id="keybindings-panel-title">Keybindings</h2>
             {captureAction ? <span className="status-pill is-running">Listening</span> : null}
@@ -514,6 +520,7 @@ export function App() {
         <ReferencePanel preset={preset} />
         <EventLogPanel events={events} onReset={handleResetLog} />
       </aside>
+      <WalkthroughTour />
     </main>
   );
 }

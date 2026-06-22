@@ -13,6 +13,7 @@ import type { PracticeState, SimEvent } from "../sim/types";
 import { EventLogPanel } from "../ui/EventLogPanel";
 
 const KEYBINDINGS_STORAGE_KEY = "melee-weaving-practice.keybindings.v1";
+const WALKTHROUGH_STORAGE_KEY = "melee-weaving-practice.walkthrough.v1";
 
 const phaserHostTestHooks = vi.hoisted(() => ({
   getPracticeState: null as null | (() => PracticeState),
@@ -105,6 +106,48 @@ describe("App UI", () => {
     expect(screen.getByText("Queue window")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reset Log" })).toBeInTheDocument();
+  });
+
+  it("shows the first-run walkthrough and anchors the planned targets", () => {
+    render(<App />);
+
+    expect(screen.getByRole("dialog", { name: "Rotation preset" })).toBeInTheDocument();
+    expect(screen.getByText(/Choose the rotation you want to practice/)).toBeInTheDocument();
+
+    const rotationSelect = screen.getByLabelText("Rotation");
+    const rotationTarget = rotationSelect.closest("[data-tour-target='rotation-select']");
+    const practiceTarget = screen.getByRole("region", { name: "Practice field" });
+    const keybindingsTarget = screen.getByRole("region", { name: "Keybindings" });
+
+    expect(rotationTarget).not.toBeNull();
+    expect(practiceTarget).toHaveAttribute("data-tour-target", "practice-hud");
+    expect(keybindingsTarget).toHaveAttribute("data-tour-target", "keybindings");
+  });
+
+  it("keeps the walkthrough hidden after it has been dismissed", () => {
+    localStorage.setItem(WALKTHROUGH_STORAGE_KEY, JSON.stringify(true));
+
+    render(<App />);
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("does not let the walkthrough change rotation or keybinding behavior", () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Skip walkthrough" }));
+    fireEvent.change(screen.getByLabelText("Rotation"), { target: { value: "half-weave-22-1w" } });
+
+    expect(screen.getByLabelText("Rotation")).toHaveValue("half-weave-22-1w");
+    expect(screen.getByTestId("phaser-host")).toHaveAttribute(
+      "data-ideal-count",
+      String(expandRotationPattern(getRotationPreset("half-weave-22-1w")).length),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Set Arcane Shot" }));
+    fireEvent.keyDown(document, { code: "KeyQ" });
+
+    expect(within(getArcaneShotKeybindingRow()).getByText("Q")).toBeInTheDocument();
   });
 
   it("renders Auto render scale by default and passes it to PhaserHost", () => {

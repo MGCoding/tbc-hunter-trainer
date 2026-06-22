@@ -288,6 +288,80 @@ select {
   font-size: 0.9rem;
 }
 
+.walkthrough-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.walkthrough-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(5, 8, 11, 0.58);
+  pointer-events: auto;
+}
+
+.walkthrough-highlight {
+  position: absolute;
+  border: 2px solid #f5df9f;
+  border-radius: 8px;
+  box-shadow:
+    0 0 0 1px rgba(21, 23, 25, 0.72),
+    0 0 0 9999px rgba(5, 8, 11, 0.18);
+  pointer-events: none;
+}
+
+.walkthrough-card {
+  position: absolute;
+  width: min(320px, calc(100vw - 48px));
+  border: 1px solid rgba(244, 242, 237, 0.18);
+  border-radius: 8px;
+  padding: 14px;
+  color: #f4f2ed;
+  background: #2a2d31;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+  pointer-events: auto;
+}
+
+.walkthrough-card:focus {
+  outline: 2px solid rgba(245, 223, 159, 0.78);
+  outline-offset: 2px;
+}
+
+.walkthrough-progress {
+  margin-bottom: 6px;
+  color: rgba(244, 242, 237, 0.62);
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.walkthrough-card h2 {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
+.walkthrough-card p {
+  margin: 8px 0 0;
+  color: rgba(244, 242, 237, 0.82);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.walkthrough-actions {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.walkthrough-actions .secondary-button:first-child {
+  justify-self: start;
+}
+
 @media (max-width: 860px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -303,6 +377,10 @@ select {
     height: auto;
     border-left: 0;
     border-top: 1px solid rgba(244, 242, 237, 0.12);
+  }
+
+  .walkthrough-card {
+    width: min(300px, calc(100vw - 32px));
   }
 }
 

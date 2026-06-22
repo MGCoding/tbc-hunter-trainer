@@ -47,7 +47,7 @@ export function ControlPanel({
         <span className={running ? "status-pill is-running" : "status-pill"}>{running ? "Running" : "Stopped"}</span>
       </div>
 
-      <label className="field">
+      <label className="field" data-tour-target="rotation-select">
         <span>Rotation</span>
         <select aria-label="Rotation" value={selectedPresetId} onChange={(event) => onPresetChange(event.target.value)}>
           {ROTATION_PRESETS.map((preset) => (
